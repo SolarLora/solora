@@ -1,0 +1,15 @@
+# Solora Bill of Materials
+
+| Component | Part | Cost |
+|-----------|------|------|
+| Main board | Heltec WiFi LoRa 32 V3 | ~$15 |
+| Solar panel | ALLPOWERS 2.5W 5V epoxy | ~$9 |
+| Battery | 1000-2000mAh LiPo JST 1.25mm | ~$6-10 |
+| Enclosure | 3D printed (files coming soon) | ~$3 |
+| **Total** | | **~$33-37** |
+
+## Where To Buy
+
+- Heltec board: Amazon or AliExpress
+- Solar panel: Amazon B00CBT8A14
+- Battery: Match JST connector size to board
