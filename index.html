@@ -1,439 +1,1368 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SOLORA — Solar Bitcoin Mesh Miner</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #0a0a0a;
-      color: #ffffff;
-      font-family: 'Courier New', monospace;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 40px 20px;
-    }
+/*
+ * ╔══════════════════════════════════════════════════════════════════╗
+ * ║                    SOLORA MESH MINER                             ║
+ * ║              Heltec WiFi LoRa 32 V3 — Version 3.7               ║
+ * ║                                                                  ║
+ * ║  Solar powered · LoRa mesh · Bitcoin native                      ║
+ * ║  solora.network                                                  ║
+ * ║                                                                  ║
+ * ║  LIBRARIES  (Tools → Manage Libraries)                          ║
+ * ║  1. RadioLib           by Jan Gromes                             ║
+ * ║  2. SSD1306 OLED       by ThingPulse                            ║
+ * ║  3. WiFiManager        by tzapu                                  ║
+ * ║  4. ArduinoJson        by Benoit Blanchon v7                     ║
+ * ║                                                                  ║
+ * ║  BOARD: Heltec WiFi LoRa 32(V3)                                  ║
+ * ║  Partition: Default 4MB with SPIFFS                              ║
+ * ╚══════════════════════════════════════════════════════════════════╝
+ */
 
-    /* ── Logo ── */
-    .logo-wrap {
-      margin-bottom: 10px;
-    }
-    .logo-wrap svg {
-      width: 220px;
-      height: auto;
-    }
-    .tagline {
-      font-size: 11px;
-      letter-spacing: 0.2em;
-      color: #006fa3;
-      text-align: center;
-      margin-bottom: 6px;
-      font-weight: 500;
-    }
-    .url-sub {
-      font-size: 10px;
-      color: #444;
-      text-align: center;
-      letter-spacing: 0.12em;
-      margin-bottom: 40px;
-    }
+#include <Arduino.h>
+#include <Wire.h>
+#include <SPI.h>
+#include <SSD1306Wire.h>
+#include <RadioLib.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <WiFiManager.h>
+#include <ArduinoJson.h>
+#include <Preferences.h>
+#include "mbedtls/sha256.h"
 
-    /* ── Stats ── */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-      margin-bottom: 50px;
-      max-width: 600px;
-      width: 100%;
+// ── Pins ──────────────────────────────────────────────────────
+#define OLED_SDA     17
+#define OLED_SCL     18
+#define OLED_RST     21
+#define VEXT_CTRL    36
+#define BAT_ADC       1
+#define PIN_LED      35
+#define PIN_PRG       0
+#define LORA_NSS      8
+#define LORA_DIO1    14
+#define LORA_RST     12
+#define LORA_BUSY    13
+
+// ── LoRa ──────────────────────────────────────────────────────
+#define LORA_FREQ        915.0
+#define LORA_BW          250.0
+#define LORA_SF          10
+#define LORA_CR          5
+#define LORA_SYNC        0x42
+#define LORA_PWR_COORD   22
+#define LORA_PWR_WORKER  14
+
+// ── Mesh ──────────────────────────────────────────────────────
+#define MAX_HOPS         3
+#define MAX_PEERS        8
+#define COORD_TIMEOUT    30000UL
+#define JOB_INTERVAL     60000UL
+#define HB_INTERVAL      20000UL
+#define RELAY_DELAY      50
+#define DEDUP_SIZE       16
+#define DEDUP_WINDOW_MS  25000UL
+
+// ── Display ───────────────────────────────────────────────────
+#define OLED_REFRESH_MS    30000UL
+#define OLED_ANIMATE_MS      500UL
+#define SCREEN_TIMEOUT_MS 120000UL
+#define PAGE_COUNT             5
+
+// ── Packet types ──────────────────────────────────────────────
+#define PKT_JOB        0x01
+#define PKT_HEARTBEAT  0x02
+#define PKT_SHARE      0x03
+
+// ── Packet structures ─────────────────────────────────────────
+struct __attribute__((packed)) JobPacket {
+  uint8_t  type, hopCount, originId, jobId;
+  uint8_t  header[80];
+  uint32_t blockHeight;
+  double   difficulty;
+};
+
+struct __attribute__((packed)) HeartbeatPacket {
+  uint8_t  type, hopCount, originId, role;
+  uint32_t hashRate, bestBits;
+  uint64_t totalHashes;
+  float    battVolts;
+  uint8_t  reserved;  // keeps struct size stable — do not remove
+};
+
+struct __attribute__((packed)) SharePacket {
+  uint8_t  type, hopCount, originId, jobId;
+  uint32_t nonce, bits;
+  uint8_t  hash[32];
+};
+
+// ── Hardware objects ──────────────────────────────────────────
+SSD1306Wire oled(0x3C, OLED_SDA, OLED_SCL);
+SX1262 radio = new Module(LORA_NSS, LORA_DIO1, LORA_RST, LORA_BUSY);
+WiFiManager wm;
+Preferences prefs;
+
+// ── Role ──────────────────────────────────────────────────────
+enum Role { ROLE_UNKNOWN, ROLE_COORDINATOR, ROLE_RELAY, ROLE_WORKER };
+Role myRole = ROLE_UNKNOWN;
+
+// ── Peer table ────────────────────────────────────────────────
+struct Peer {
+  uint8_t  id, role;
+  uint32_t hashRate, bestBits;
+  uint64_t totalHashes;
+  float    battVolts;
+  unsigned long lastSeen;
+};
+Peer    peers[MAX_PEERS];
+uint8_t peerCount = 0;
+
+// ── Deduplication — time based 25s window ─────────────────────
+struct PacketSeen {
+  uint8_t  originId, type;
+  uint32_t seenAt;
+};
+PacketSeen seenPackets[DEDUP_SIZE];
+uint8_t    seenIndex = 0;
+
+bool alreadySeen(uint8_t origin, uint8_t type) {
+  unsigned long now = millis();
+  for (int i = 0; i < DEDUP_SIZE; i++)
+    if (seenPackets[i].originId == origin &&
+        seenPackets[i].type     == type   &&
+        now - seenPackets[i].seenAt < DEDUP_WINDOW_MS)
+      return true;
+  seenPackets[seenIndex % DEDUP_SIZE] = {origin, type, (uint32_t)now};
+  seenIndex++;
+  return false;
+}
+
+// ── State ─────────────────────────────────────────────────────
+uint8_t  myId         = 0;
+bool     wifiOk       = false;
+String   meshId       = "";
+String   btcAddress   = "";
+String   groupCode    = "";
+bool     statsOptIn   = false;
+
+// Mining
+uint32_t nonce        = 0;
+uint64_t totalHashes  = 0;
+uint32_t hashRate     = 0;
+uint32_t bestBits     = 0;
+uint8_t  bestHash[32] = {0};
+uint32_t secHashes    = 0;
+uint8_t  hdr[80];
+uint8_t  curJobId     = 0;
+uint32_t blockHeight  = 895000;
+double   netDiff      = 88.0e12;
+bool     liveData     = false;
+unsigned long lastCoordHeard = 0;
+
+// Solora pioneer tally
+uint32_t soloraRelays     = 0;
+uint32_t soloraTotalSaved = 0;
+
+// LoRa timing for page 3
+unsigned long lastTxMs  = 0;
+unsigned long lastRxMs  = 0;
+float         lastRssi  = 0;
+float         lastSnr   = 0;
+unsigned long nextTxMs  = 0;
+
+// Display
+bool          screenOn     = true;
+unsigned long lastButtonMs = 0;
+uint8_t       page         = 0;
+unsigned long tDisp        = 0;
+unsigned long tAnim        = 0;
+
+// Animation
+uint8_t vuLevel   = 0;
+bool    pulseDot  = false;
+
+// LoRa
+volatile bool rxFlag   = false;
+unsigned long lastTx   = 0;
+unsigned long minPause = 0;
+
+// Timers
+unsigned long tRate=0, tJob=0, tHB=0, tNet=0, tFailover=0, tStats=0, tSave=0;
+
+// ── OLED helpers ──────────────────────────────────────────────
+void oled_clear() {
+  oled.clear();
+  oled.setTextAlignment(TEXT_ALIGN_LEFT);
+}
+void oled_show() { oled.display(); }
+
+// ── ISR ───────────────────────────────────────────────────────
+void IRAM_ATTR onRx() { rxFlag = true; }
+
+// ── Forward declarations ──────────────────────────────────────
+void initHardware();
+void initLoRa();
+void doWiFiSetup();
+void determineRole();
+void applyRole();
+void fetchBitcoinData();
+void initBlockHeader();
+void mineOne(uint32_t n, uint8_t* out);
+uint32_t leadingZeros(const uint8_t* h);
+bool loRaSend(uint8_t* data, size_t len);
+void handleLoRaRx();
+void broadcastJob();
+void sendHeartbeat();
+void sendShare(uint32_t n, uint8_t* hash, uint32_t bits);
+void updatePeer(uint8_t id, uint8_t role, uint32_t hr,
+                uint32_t bits, uint64_t th, float batt);
+uint32_t networkHashRate();
+int activePeers();
+void checkFailover();
+void checkPrgButton();
+void handleScreenPower();
+void reportStats();
+void saveRelayTally();
+void loadRelayTally();
+void generateMeshId();
+float readBatt();
+void splashScreen();
+void refreshDisplay();
+void animateTick();
+void drawStatusBar();
+void drawPage0Mining();
+void drawPage1Lottery();
+void drawPage2Network();
+void drawPage3Lora();
+void drawPage4Status();
+void drawAnimPage0();
+void drawAnimPage1();
+void drawAnimPage3();
+void winScreen();
+String fmtRate(uint32_t r);
+String fmtOdds(double diff, uint32_t r);
+
+// ════════════════════════════════════════════════════════════════
+//  SETUP
+// ════════════════════════════════════════════════════════════════
+void setup() {
+  Serial.begin(115200);
+  delay(200);
+  Serial.println("\n[SOLORA] v3.7 booting...");
+
+  initHardware();
+  splashScreen();
+
+  if (digitalRead(PIN_PRG) == LOW) {
+    oled_clear();
+    oled.setFont(ArialMT_Plain_10);
+    oled.drawString(0,  0, "Clearing settings...");
+    oled.drawString(0, 16, "Release PRG");
+    oled_show();
+    wm.resetSettings();
+    prefs.begin("solora", false);
+    prefs.clear();
+    prefs.end();
+    delay(1500);
+    ESP.restart();
+  }
+
+  generateMeshId();
+  loadRelayTally();
+
+  prefs.begin("solora", true);
+  btcAddress = prefs.getString("btc", "");
+  groupCode  = prefs.getString("grp", "");
+  statsOptIn = prefs.getBool("stats", false);
+  prefs.end();
+
+  Serial.printf("[BOOT] MeshID=%s BTC=%s Group=%s Stats=%d\n",
+    meshId.c_str(),
+    btcAddress.length() > 0 ? "SET" : "NOT SET",
+    groupCode.length() > 0 ? groupCode.c_str() : "NONE",
+    (int)statsOptIn);
+
+  doWiFiSetup();
+
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  myId = mac[5];
+  Serial.printf("[BOOT] Device ID: 0x%02X\n", myId);
+
+  initLoRa();
+  determineRole();
+  applyRole();
+
+  if (myRole == ROLE_COORDINATOR && wifiOk)
+    fetchBitcoinData();
+
+  initBlockHeader();
+  analogReadResolution(12);
+  analogSetAttenuation(ADC_11db);
+
+  lastCoordHeard = millis();
+  lastButtonMs   = millis();
+  nextTxMs       = millis() + HB_INTERVAL;
+
+  tRate = tDisp = tAnim = tJob = tHB = tNet = tFailover = tStats = tSave = millis();
+
+  Serial.printf("[BOOT] Ready. Role=%s ID=0x%02X MeshID=%s\n",
+    myRole==ROLE_COORDINATOR?"COORDINATOR":
+    myRole==ROLE_RELAY?"RELAY":"WORKER",
+    myId, meshId.c_str());
+}
+
+// ════════════════════════════════════════════════════════════════
+//  LOOP
+// ════════════════════════════════════════════════════════════════
+void loop() {
+  for (int i = 0; i < 150; i++) {
+    uint8_t hash[32];
+    mineOne(nonce, hash);
+    uint32_t bits = leadingZeros(hash);
+    if (bits > bestBits) {
+      bestBits = bits;
+      memcpy(bestHash, hash, 32);
+      Serial.printf("[MINE] %lu bits nonce=0x%08lX\n",
+                    (unsigned long)bits, (unsigned long)nonce);
+      if (bits >= 76) winScreen();
+      if (bits >= 20) sendShare(nonce, hash, bits);
     }
-    .stat-box {
-      border: 1px solid #1a1a1a;
-      padding: 20px;
-      text-align: center;
-      background: #111;
+    nonce++; totalHashes++; secHashes++;
+    if (nonce == 0) initBlockHeader();
+  }
+
+  unsigned long now = millis();
+
+  if (now - tRate >= 1000) {
+    hashRate = secHashes;
+    secHashes = 0;
+    tRate = now;
+    uint32_t peak = 600000;
+    vuLevel = (uint8_t)constrain((hashRate * 10) / peak, 0, 10);
+  }
+
+  if (rxFlag) { rxFlag = false; handleLoRaRx(); }
+
+  if (myRole == ROLE_COORDINATOR && now - tJob >= JOB_INTERVAL) {
+    Serial.println("[DEBUG] Broadcasting job");
+    broadcastJob();
+    tJob = now;
+    nextTxMs = now + HB_INTERVAL;
+  }
+
+  if (now - tHB >= HB_INTERVAL) {
+    Serial.printf("[DEBUG] Sending heartbeat role=%d id=0x%02X\n",
+      myRole==ROLE_COORDINATOR?0:myRole==ROLE_RELAY?1:2, myId);
+    sendHeartbeat();
+    tHB = now;
+    nextTxMs = now + HB_INTERVAL;
+  }
+
+  if (myRole == ROLE_COORDINATOR && wifiOk &&
+      now - tNet >= 300000UL) {
+    fetchBitcoinData(); tNet = now;
+  }
+
+  if (now - tFailover >= 5000UL) {
+    checkFailover(); tFailover = now;
+  }
+
+  if (statsOptIn && wifiOk && now - tStats >= 3600000UL) {
+    reportStats(); tStats = now;
+  }
+
+  if (now - tSave >= 600000UL) {
+    saveRelayTally(); tSave = now;
+  }
+
+  handleScreenPower();
+
+  if (screenOn && now - tDisp >= OLED_REFRESH_MS) {
+    refreshDisplay(); tDisp = now;
+  }
+
+  if (screenOn && now - tAnim >= OLED_ANIMATE_MS) {
+    pulseDot = !pulseDot;
+    animateTick();
+    tAnim = now;
+  }
+
+  checkPrgButton();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  HARDWARE INIT
+// ════════════════════════════════════════════════════════════════
+void initHardware() {
+  pinMode(VEXT_CTRL, OUTPUT);
+  digitalWrite(VEXT_CTRL, LOW);
+  delay(100);
+
+  pinMode(OLED_RST, OUTPUT);
+  digitalWrite(OLED_RST, LOW);  delay(20);
+  digitalWrite(OLED_RST, HIGH); delay(50);
+
+  Wire.begin(OLED_SDA, OLED_SCL);
+  oled.init();
+  oled.flipScreenVertically();
+  oled_clear();
+  oled_show();
+
+  pinMode(PIN_LED, OUTPUT);
+  digitalWrite(PIN_LED, LOW);
+  pinMode(PIN_PRG, INPUT_PULLUP);
+  Serial.println("[HW] OK");
+}
+
+// ════════════════════════════════════════════════════════════════
+//  LORA INIT
+// ════════════════════════════════════════════════════════════════
+void initLoRa() {
+  oled_clear();
+  oled.setFont(ArialMT_Plain_10);
+  oled.drawString(0, 0, "Init LoRa...");
+  oled_show();
+
+  SPI.begin(9, 11, 10, 8);
+
+  int state = radio.begin(
+    LORA_FREQ, LORA_BW, LORA_SF,
+    LORA_CR, LORA_SYNC, LORA_PWR_COORD, 8);
+
+  if (state != RADIOLIB_ERR_NONE) {
+    oled_clear();
+    oled.setFont(ArialMT_Plain_10);
+    oled.drawString(0,  0, "LoRa FAILED!");
+    char buf[24];
+    snprintf(buf, sizeof(buf), "Error: %d", state);
+    oled.drawString(0, 14, buf);
+    oled.drawString(0, 28, "Mining solo...");
+    oled_show();
+    Serial.printf("[LORA] Failed: %d\n", state);
+    delay(3000);
+    return;
+  }
+
+  radio.setDio1Action(onRx);
+  radio.startReceive();
+
+  oled_clear();
+  oled.setFont(ArialMT_Plain_10);
+  char buf[32];
+  snprintf(buf, sizeof(buf), "LoRa OK %.0fMHz SF%d",
+    LORA_FREQ, LORA_SF);
+  oled.drawString(0, 0, buf);
+  oled_show();
+  delay(600);
+  Serial.printf("[LORA] OK %.1fMHz SF%d sync=0x%02X\n",
+    LORA_FREQ, LORA_SF, LORA_SYNC);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ROLE DETERMINATION
+// ════════════════════════════════════════════════════════════════
+void determineRole() {
+  oled_clear();
+  oled.setFont(ArialMT_Plain_10);
+  oled.drawString(0,  0, "Finding role...");
+  oled.drawString(0, 14, "Listening 10s...");
+  oled_show();
+  Serial.println("[ROLE] Listening...");
+
+  unsigned long start = millis();
+  while (millis() - start < 10000) {
+    if (rxFlag) {
+      rxFlag = false;
+      uint8_t buf[sizeof(JobPacket) + 4];
+      size_t  len = sizeof(buf);
+      if (radio.readData(buf, len) == RADIOLIB_ERR_NONE
+          && len >= 3) {
+        Serial.printf("[ROLE] Heard type=0x%02X from=0x%02X\n",
+          buf[0], buf[2]);
+        if (buf[0] == PKT_HEARTBEAT &&
+            len >= sizeof(HeartbeatPacket)) {
+          HeartbeatPacket* hb = (HeartbeatPacket*)buf;
+          if (hb->role == 0) {
+            lastCoordHeard = millis();
+            myRole = ROLE_WORKER;
+            Serial.printf("[ROLE] Coordinator: 0x%02X\n",
+                          hb->originId);
+            break;
+          }
+        }
+        if (buf[0] == PKT_JOB &&
+            len >= sizeof(JobPacket)) {
+          JobPacket* jp = (JobPacket*)buf;
+          lastCoordHeard = millis();
+          myRole = ROLE_WORKER;
+          memcpy(hdr, jp->header, 80);
+          blockHeight = jp->blockHeight;
+          netDiff     = jp->difficulty;
+          curJobId    = jp->jobId;
+          liveData    = true;
+          Serial.printf("[ROLE] Job from 0x%02X\n",
+                        jp->originId);
+          break;
+        }
+      }
+      radio.startReceive();
     }
-    .stat-number {
-      font-size: 2rem;
-      color: #f7931a;
-      display: block;
-      margin-bottom: 5px;
+    delay(10);
+  }
+
+  if (myRole == ROLE_UNKNOWN)
+    myRole = wifiOk ? ROLE_COORDINATOR : ROLE_RELAY;
+
+  radio.startReceive();
+
+  oled_clear();
+  oled.setFont(ArialMT_Plain_10);
+  oled.drawString(0, 0,
+    myRole==ROLE_COORDINATOR ? "COORDINATOR" :
+    myRole==ROLE_RELAY       ? "RELAY"       : "WORKER");
+  oled_show();
+  delay(800);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  APPLY ROLE
+// ════════════════════════════════════════════════════════════════
+void applyRole() {
+  if (myRole == ROLE_COORDINATOR) {
+    setCpuFrequencyMhz(240);
+    radio.setOutputPower(LORA_PWR_COORD);
+    Serial.println("[ROLE] COORD CPU=240MHz LoRa=22dBm");
+  } else {
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+    wifiOk = false;
+    setCpuFrequencyMhz(160);
+    radio.setOutputPower(LORA_PWR_WORKER);
+    Serial.println("[ROLE] WORKER WiFi=OFF CPU=160MHz LoRa=14dBm");
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  COORDINATOR FAILOVER
+// ════════════════════════════════════════════════════════════════
+void checkFailover() {
+  if (myRole != ROLE_COORDINATOR) {
+    if (millis() - lastCoordHeard > COORD_TIMEOUT) {
+      Serial.println("[FAILOVER] Attempting promotion...");
+      WiFi.mode(WIFI_STA);
+      WiFi.begin();
+      unsigned long wt = millis();
+      while (WiFi.status() != WL_CONNECTED && millis()-wt < 8000)
+        delay(100);
+      if (WiFi.status() == WL_CONNECTED) {
+        wifiOk = true;
+        delay((uint32_t)myId * 200);
+        if (millis() - lastCoordHeard > COORD_TIMEOUT) {
+          myRole = ROLE_COORDINATOR;
+          setCpuFrequencyMhz(240);
+          radio.setOutputPower(LORA_PWR_COORD);
+          fetchBitcoinData();
+          broadcastJob();
+          tJob = millis();
+          Serial.println("[FAILOVER] PROMOTED");
+        } else {
+          WiFi.disconnect(true);
+          WiFi.mode(WIFI_OFF);
+          wifiOk = false;
+          Serial.println("[FAILOVER] Another coord appeared");
+        }
+      } else {
+        WiFi.mode(WIFI_OFF);
+        wifiOk = false;
+      }
     }
-    .stat-label {
-      font-size: 0.65rem;
-      color: #555;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  LORA SEND
+// ════════════════════════════════════════════════════════════════
+bool loRaSend(uint8_t* data, size_t len) {
+  if (millis() < lastTx + minPause) return false;
+  radio.standby();
+  unsigned long t = millis();
+  int state = radio.transmit(data, len);
+  unsigned long tx = millis() - t;
+  minPause  = tx * 100;
+  lastTx    = millis();
+  lastTxMs  = millis();
+  nextTxMs  = millis() + HB_INTERVAL;
+  radio.setDio1Action(onRx);
+  radio.startReceive();
+  Serial.printf("[TX] type=0x%02X len=%d %lums\n",
+    data[0], (int)len, tx);
+  return state == RADIOLIB_ERR_NONE;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  LORA RECEIVE
+// ════════════════════════════════════════════════════════════════
+void handleLoRaRx() {
+  uint8_t buf[256];
+  size_t  len = sizeof(buf);
+  int state = radio.readData(buf, len);
+  radio.startReceive();
+
+  if (state != RADIOLIB_ERR_NONE) {
+    Serial.printf("[RX] Error: %d\n", state);
+    return;
+  }
+  if (len < 3) return;
+
+  uint8_t type = buf[0], hops = buf[1], orig = buf[2];
+  if (orig == myId) return;
+
+  lastRxMs = millis();
+  lastRssi = radio.getRSSI();
+  lastSnr  = radio.getSNR();
+
+  if (alreadySeen(orig, type)) return;
+
+  Serial.printf("[RX] 0x%02X type=0x%02X hops=%d RSSI=%.0f\n",
+    orig, type, hops, lastRssi);
+
+  if (type == PKT_JOB && len >= sizeof(JobPacket)) {
+    JobPacket* jp = (JobPacket*)buf;
+    lastCoordHeard = millis();
+    memcpy(hdr, jp->header, 80);
+    blockHeight = jp->blockHeight;
+    netDiff     = jp->difficulty;
+    curJobId    = jp->jobId;
+    nonce       = (uint32_t)myId * (0xFFFFFFFF / 256);
+    liveData    = true;
+    Serial.printf("[JOB] #%d from 0x%02X height=%lu\n",
+      jp->jobId, jp->originId, (unsigned long)jp->blockHeight);
+    if (hops < MAX_HOPS) {
+      delay(RELAY_DELAY + (myId & 0x0F) * 10);
+      jp->hopCount++;
+      if (loRaSend(buf, len)) soloraRelays++;
     }
+  }
 
-    /* ── Description ── */
-    .description {
-      max-width: 500px;
-      text-align: center;
-      color: #888;
-      line-height: 1.8;
-      margin-bottom: 40px;
-      font-size: 0.88rem;
-    }
-    .highlight { color: #f7931a; }
-    .highlight-blue { color: #009FDB; }
+  else if (type == PKT_HEARTBEAT &&
+           len >= sizeof(HeartbeatPacket)) {
+    HeartbeatPacket* hb = (HeartbeatPacket*)buf;
+    Serial.printf("[HB] 0x%02X role=%d hr=%lu bits=%lu\n",
+      hb->originId, hb->role,
+      (unsigned long)hb->hashRate,
+      (unsigned long)hb->bestBits);
 
-    /* ── Links ── */
-    .links {
-      display: flex;
-      gap: 14px;
-      margin-bottom: 50px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    .link-btn {
-      border: 1px solid #f7931a;
-      color: #f7931a;
-      padding: 10px 22px;
-      text-decoration: none;
-      font-family: 'Courier New', monospace;
-      font-size: 0.75rem;
-      letter-spacing: 0.1em;
-      transition: all 0.2s;
-    }
-    .link-btn:hover { background: #f7931a; color: #000; }
-    .link-btn.blue {
-      border-color: #009FDB;
-      color: #009FDB;
-    }
-    .link-btn.blue:hover { background: #009FDB; color: #000; }
-
-    /* ── Principles ── */
-    .principles {
-      max-width: 500px;
-      width: 100%;
-      margin-bottom: 50px;
-    }
-    .principles-title {
-      font-size: 0.65rem;
-      letter-spacing: 0.15em;
-      color: #444;
-      text-transform: uppercase;
-      margin-bottom: 16px;
-      text-align: center;
-    }
-    .principle {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      margin-bottom: 12px;
-      font-size: 0.82rem;
-      color: #777;
-      line-height: 1.6;
-    }
-    .principle-dot { color: #f7931a; flex-shrink: 0; margin-top: 2px; }
-
-    /* ── Mesh lookup ── */
-    .mesh-lookup {
-      max-width: 420px;
-      width: 100%;
-      margin-bottom: 50px;
-    }
-    .mesh-lookup h3 {
-      font-size: 0.65rem;
-      letter-spacing: 0.15em;
-      color: #444;
-      text-transform: uppercase;
-      margin-bottom: 12px;
-      text-align: center;
-    }
-    .lookup-row { display: flex; gap: 8px; }
-    .lookup-input {
-      flex: 1;
-      background: #111;
-      border: 1px solid #222;
-      color: #fff;
-      padding: 10px;
-      font-family: 'Courier New', monospace;
-      font-size: 1rem;
-      text-transform: uppercase;
-      letter-spacing: 0.2em;
-    }
-    .lookup-input:focus { outline: none; border-color: #f7931a; }
-    .lookup-btn {
-      background: #f7931a;
-      border: none;
-      color: #000;
-      padding: 10px 18px;
-      font-family: 'Courier New', monospace;
-      font-size: 0.75rem;
-      cursor: pointer;
-      letter-spacing: 0.08em;
-    }
-    .lookup-result {
-      margin-top: 12px;
-      padding: 12px;
-      border: 1px solid #1a1a1a;
-      background: #111;
-      font-size: 0.78rem;
-      color: #888;
-      display: none;
-      line-height: 1.7;
-    }
-
-    /* ── Divider ── */
-    .divider {
-      width: 100%;
-      max-width: 500px;
-      border: none;
-      border-top: 1px solid #1a1a1a;
-      margin: 20px 0 40px;
-    }
-
-    /* ── Footer ── */
-    .footer {
-      font-size: 0.65rem;
-      color: #333;
-      text-align: center;
-      letter-spacing: 0.1em;
-      line-height: 2;
-    }
-    .footer a { color: #444; text-decoration: none; }
-    .footer a:hover { color: #009FDB; }
-  </style>
-</head>
-<body>
-
-  <!-- Logo SVG inline -->
-  <div class="logo-wrap">
-    <svg viewBox="0 0 340 310" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="g1" x1="0" y1="0" x2="0" y2="310" gradientUnits="userSpaceOnUse">
-          <stop offset="0%"   stop-color="#f7931a"/>
-          <stop offset="48%"  stop-color="#d4621a"/>
-          <stop offset="100%" stop-color="#009FDB"/>
-        </linearGradient>
-      </defs>
-      <!-- Sun -->
-      <circle cx="170" cy="80" r="34" fill="url(#g1)"/>
-      <!-- Rays -->
-      <g stroke="url(#g1)" stroke-width="3.5" stroke-linecap="round" opacity="0.9">
-        <line x1="170" y1="36" x2="170" y2="22"/>
-        <line x1="170" y1="124" x2="170" y2="138"/>
-        <line x1="126" y1="80" x2="112" y2="80"/>
-        <line x1="214" y1="80" x2="228" y2="80"/>
-        <line x1="139" y1="49" x2="129" y2="39"/>
-        <line x1="201" y1="111" x2="211" y2="121"/>
-        <line x1="201" y1="49" x2="211" y2="39"/>
-        <line x1="139" y1="111" x2="129" y2="121"/>
-      </g>
-      <!-- LoRa arcs left -->
-      <g fill="none" stroke-linecap="round">
-        <path d="M130 62 A48 48 0 0 0 130 98" stroke="url(#g1)" stroke-width="3" opacity="0.8"/>
-        <path d="M110 50 A72 72 0 0 0 110 110" stroke="url(#g1)" stroke-width="2.2" opacity="0.48"/>
-        <path d="M90 38 A96 96 0 0 0 90 122" stroke="url(#g1)" stroke-width="1.6" opacity="0.26"/>
-      </g>
-      <!-- LoRa arcs right -->
-      <g fill="none" stroke-linecap="round">
-        <path d="M210 62 A48 48 0 0 1 210 98" stroke="url(#g1)" stroke-width="3" opacity="0.8"/>
-        <path d="M230 50 A72 72 0 0 1 230 110" stroke="url(#g1)" stroke-width="2.2" opacity="0.48"/>
-        <path d="M250 38 A96 96 0 0 1 250 122" stroke="url(#g1)" stroke-width="1.6" opacity="0.26"/>
-      </g>
-      <!-- Mesh centre -->
-      <circle cx="170" cy="185" r="6" fill="url(#g1)"/>
-      <!-- Mesh inner ring -->
-      <circle cx="170" cy="162" r="4.5" fill="url(#g1)" opacity="0.8"/>
-      <circle cx="190" cy="173" r="4.5" fill="url(#g1)" opacity="0.8"/>
-      <circle cx="190" cy="197" r="4.5" fill="url(#g1)" opacity="0.8"/>
-      <circle cx="170" cy="208" r="4.5" fill="url(#g1)" opacity="0.8"/>
-      <circle cx="150" cy="197" r="4.5" fill="url(#g1)" opacity="0.8"/>
-      <circle cx="150" cy="173" r="4.5" fill="url(#g1)" opacity="0.8"/>
-      <!-- Mesh edges centre -->
-      <g stroke="url(#g1)" stroke-width="1.4" opacity="0.45" fill="none">
-        <line x1="170" y1="185" x2="170" y2="162"/>
-        <line x1="170" y1="185" x2="190" y2="173"/>
-        <line x1="170" y1="185" x2="190" y2="197"/>
-        <line x1="170" y1="185" x2="170" y2="208"/>
-        <line x1="170" y1="185" x2="150" y2="197"/>
-        <line x1="170" y1="185" x2="150" y2="173"/>
-      </g>
-      <!-- Mesh edges ring -->
-      <g stroke="url(#g1)" stroke-width="0.9" opacity="0.25" fill="none">
-        <line x1="170" y1="162" x2="190" y2="173"/>
-        <line x1="190" y1="173" x2="190" y2="197"/>
-        <line x1="190" y1="197" x2="170" y2="208"/>
-        <line x1="170" y1="208" x2="150" y2="197"/>
-        <line x1="150" y1="197" x2="150" y2="173"/>
-        <line x1="150" y1="173" x2="170" y2="162"/>
-      </g>
-      <!-- Outer nodes -->
-      <circle cx="170" cy="143" r="3" fill="url(#g1)" opacity="0.35"/>
-      <circle cx="207" cy="162" r="3" fill="url(#g1)" opacity="0.35"/>
-      <circle cx="207" cy="204" r="3" fill="url(#g1)" opacity="0.35"/>
-      <circle cx="170" cy="227" r="3" fill="url(#g1)" opacity="0.35"/>
-      <circle cx="133" cy="204" r="3" fill="url(#g1)" opacity="0.35"/>
-      <circle cx="133" cy="162" r="3" fill="url(#g1)" opacity="0.35"/>
-      <g stroke="url(#g1)" stroke-width="0.7" opacity="0.15" fill="none">
-        <line x1="170" y1="162" x2="170" y2="143"/>
-        <line x1="190" y1="173" x2="207" y2="162"/>
-        <line x1="190" y1="197" x2="207" y2="204"/>
-        <line x1="170" y1="208" x2="170" y2="227"/>
-        <line x1="150" y1="197" x2="133" y2="204"/>
-        <line x1="150" y1="173" x2="133" y2="162"/>
-      </g>
-      <!-- Wordmark -->
-      <text x="170" y="272" text-anchor="middle"
-        font-family="Courier New, monospace"
-        font-size="46" font-weight="700"
-        letter-spacing="10"
-        fill="url(#g1)">SOLORA</text>
-    </svg>
-  </div>
-
-  <div class="tagline">SOLAR · LORA · BITCOIN</div>
-  <div class="url-sub">solora.network</div>
-
-  <!-- Live stats -->
-  <div class="stats-grid">
-    <div class="stat-box">
-      <span class="stat-number" id="deviceCount">—</span>
-      <span class="stat-label">Devices online</span>
-    </div>
-    <div class="stat-box">
-      <span class="stat-number" id="hashRate">—</span>
-      <span class="stat-label">Network hash rate</span>
-    </div>
-    <div class="stat-box">
-      <span class="stat-number" id="meshCount">—</span>
-      <span class="stat-label">Active meshes</span>
-    </div>
-  </div>
-
-  <div id="statsNote" style="font-size:0.65rem;color:#333;letter-spacing:0.08em;margin-bottom:30px;text-align:center;">
-    Live network stats coming soon — API in progress
-  </div>
-
-  <div class="description">
-    A <span class="highlight">solar-powered</span> Bitcoin miner that automatically forms a
-    <span class="highlight-blue">self-organizing LoRa mesh</span> with nearby devices.
-    Set it on a windowsill. It mines real Bitcoin 24/7 powered by sunlight.
-    No electricity bill. No account. No company in the middle.
-    Every device that joins makes the network stronger.
-  </div>
-
-  <div class="links">
-    <a class="link-btn" href="https://github.com/solarlora/solora">GitHub →</a>
-    <a class="link-btn blue" href="journal.html">Build journal →</a>
-    <a class="link-btn" href="#lookup">Find my mesh →</a>
-  </div>
-
-  <hr class="divider">
-
-  <div class="principles">
-    <div class="principles-title">The principles</div>
-    <div class="principle">
-      <span class="principle-dot">▸</span>
-      <span>Works forever without us. No server dependency. No account required.</span>
-    </div>
-    <div class="principle">
-      <span class="principle-dot">▸</span>
-      <span>Your Bitcoin address is stored only on your device. We never see it.</span>
-    </div>
-    <div class="principle">
-      <span class="principle-dot">▸</span>
-      <span>Open source firmware. Audit every line. Fork it. Improve it.</span>
-    </div>
-    <div class="principle">
-      <span class="principle-dot">▸</span>
-      <span>If we disappeared tomorrow your device keeps mining forever.</span>
-    </div>
-    <div class="principle">
-      <span class="principle-dot">▸</span>
-      <span>Relay tally builds toward Solora coin — earned by network work, not bought.</span>
-    </div>
-  </div>
-
-  <hr class="divider">
-
-  <!-- Mesh lookup -->
-  <div class="mesh-lookup" id="lookup">
-    <h3>Find your mesh</h3>
-    <div class="lookup-row">
-      <input class="lookup-input" id="meshInput" type="text"
-        maxlength="4" placeholder="A3F2"
-        oninput="this.value=this.value.toUpperCase()">
-      <button class="lookup-btn" onclick="lookupMesh()">Look up</button>
-    </div>
-    <div class="lookup-result" id="lookupResult"></div>
-  </div>
-
-  <hr class="divider">
-
-  <div class="footer">
-    <p>solora.network &nbsp;·&nbsp;
-      <a href="https://github.com/solarlora/solora">open source MIT</a>
-      &nbsp;·&nbsp;
-      <a href="journal.html">build journal</a>
-    </p>
-    <p style="margin-top:6px;">No personal data collected. Ever.</p>
-    <p style="margin-top:6px; color:#222;">THE DEVICE WORKS FOR ITS OWNER. NOT FOR US.</p>
-  </div>
-
-  <script>
-    async function loadStats() {
-      try {
-        const r = await fetch('/api/stats/summary');
-        if (!r.ok) throw new Error();
-        const d = await r.json();
-        document.getElementById('deviceCount').textContent = d.totalDevices || '—';
-        document.getElementById('hashRate').textContent = fmtRate(d.totalHashRate);
-        document.getElementById('meshCount').textContent = d.totalMeshes || '—';
-        document.getElementById('statsNote').style.display = 'none';
-      } catch(e) {
-        document.getElementById('deviceCount').textContent = '—';
-        document.getElementById('hashRate').textContent = '—';
-        document.getElementById('meshCount').textContent = '—';
+    if (hb->role == 0) {
+      lastCoordHeard = millis();
+      if (myRole == ROLE_COORDINATOR && hb->originId < myId) {
+        Serial.printf("[ROLE] Demoting — 0x%02X lower ID\n",
+                      hb->originId);
+        myRole = ROLE_WORKER;
+        WiFi.disconnect(true);
+        WiFi.mode(WIFI_OFF);
+        wifiOk = false;
+        setCpuFrequencyMhz(160);
+        radio.setOutputPower(LORA_PWR_WORKER);
       }
     }
 
-    async function lookupMesh() {
-      const id = document.getElementById('meshInput').value.trim();
-      const result = document.getElementById('lookupResult');
-      if (id.length !== 4) {
-        result.style.display = 'block';
-        result.innerHTML = 'Enter your 4-character mesh ID from the device status page.';
-        return;
-      }
-      result.style.display = 'block';
-      result.innerHTML = 'Looking up mesh ' + id + '...';
-      try {
-        const r = await fetch('/api/stats/mesh/' + id);
-        if (!r.ok) throw new Error();
-        const d = await r.json();
-        result.innerHTML =
-          'MESH ' + id + '<br>' +
-          'Devices: ' + d.deviceCount + '<br>' +
-          'Hash rate: ' + fmtRate(d.hashRate) + '<br>' +
-          'Best score: ' + d.bestBits + ' bits<br>' +
-          'Firmware: v' + d.firmware + '<br>' +
-          'Last seen: ' + d.lastSeen;
-      } catch(e) {
-        result.innerHTML =
-          'Mesh ' + id + ' not found yet.<br>' +
-          'Make sure your device has WiFi connected and stats sharing enabled.';
-      }
+    updatePeer(hb->originId, hb->role, hb->hashRate,
+               hb->bestBits, hb->totalHashes, hb->battVolts);
+
+    if (hops < MAX_HOPS) {
+      delay(RELAY_DELAY + (myId & 0x0F) * 10);
+      hb->hopCount++;
+      if (loRaSend(buf, len)) soloraRelays++;
     }
+  }
 
-    function fmtRate(r) {
-      if (!r) return '—';
-      if (r >= 1000000) return (r/1000000).toFixed(2) + ' MH/s';
-      if (r >= 1000)    return (r/1000).toFixed(1) + ' KH/s';
-      return r + ' H/s';
+  else if (type == PKT_SHARE && len >= sizeof(SharePacket)) {
+    SharePacket* sp = (SharePacket*)buf;
+    Serial.printf("[SHARE] 0x%02X bits=%lu\n",
+      sp->originId, (unsigned long)sp->bits);
+    if (myRole != ROLE_COORDINATOR && hops < MAX_HOPS) {
+      delay(RELAY_DELAY);
+      sp->hopCount++;
+      if (loRaSend(buf, len)) soloraRelays++;
     }
+    if (myRole == ROLE_COORDINATOR && sp->bits >= 76)
+      Serial.println("[COORD] *** BLOCK via mesh! ***");
+  }
+}
 
-    document.getElementById('meshInput')
-      .addEventListener('keypress', e => { if (e.key==='Enter') lookupMesh(); });
+// ════════════════════════════════════════════════════════════════
+//  BROADCAST / SEND
+// ════════════════════════════════════════════════════════════════
+void broadcastJob() {
+  JobPacket jp;
+  jp.type=PKT_JOB; jp.hopCount=0;
+  jp.originId=myId; jp.jobId=++curJobId;
+  memcpy(jp.header, hdr, 80);
+  jp.blockHeight = blockHeight;
+  jp.difficulty  = netDiff;
+  Serial.printf("[COORD] Job #%d\n", curJobId);
+  loRaSend((uint8_t*)&jp, sizeof(jp));
+}
 
-    loadStats();
-    setInterval(loadStats, 60000);
-  </script>
-</body>
-</html>
+void sendHeartbeat() {
+  HeartbeatPacket hb;
+  hb.type        = PKT_HEARTBEAT;
+  hb.hopCount    = 0;
+  hb.originId    = myId;
+  hb.role        = myRole==ROLE_COORDINATOR?0:
+                   myRole==ROLE_RELAY?1:2;
+  hb.hashRate    = hashRate;
+  hb.bestBits    = bestBits;
+  hb.totalHashes = totalHashes;
+  hb.battVolts   = readBatt();
+  hb.reserved    = 0;
+  loRaSend((uint8_t*)&hb, sizeof(hb));
+}
+
+void sendShare(uint32_t n, uint8_t* hash, uint32_t bits) {
+  SharePacket sp;
+  sp.type=PKT_SHARE; sp.hopCount=0;
+  sp.originId=myId; sp.jobId=curJobId;
+  sp.nonce=n; sp.bits=bits;
+  memcpy(sp.hash, hash, 32);
+  loRaSend((uint8_t*)&sp, sizeof(sp));
+}
+
+// ════════════════════════════════════════════════════════════════
+//  PEER TABLE
+// ════════════════════════════════════════════════════════════════
+void updatePeer(uint8_t id, uint8_t role, uint32_t hr,
+                uint32_t bits, uint64_t th, float batt) {
+  for (int i = 0; i < peerCount; i++) {
+    if (peers[i].id == id) {
+      peers[i] = {id,role,hr,bits,th,batt,millis()};
+      return;
+    }
+  }
+  if (peerCount < MAX_PEERS) {
+    peers[peerCount++] = {id,role,hr,bits,th,batt,millis()};
+    Serial.printf("[MESH] New peer 0x%02X\n", id);
+  }
+}
+
+uint32_t networkHashRate() {
+  uint32_t t = hashRate;
+  unsigned long now = millis();
+  for (int i = 0; i < peerCount; i++)
+    if (now - peers[i].lastSeen < 45000)
+      t += peers[i].hashRate;
+  return t;
+}
+
+int activePeers() {
+  int n = 0;
+  unsigned long now = millis();
+  for (int i = 0; i < peerCount; i++)
+    if (now - peers[i].lastSeen < 45000) n++;
+  return n;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  SHA-256 MINING
+// ════════════════════════════════════════════════════════════════
+void mineOne(uint32_t n, uint8_t* out) {
+  hdr[76]=n&0xFF;       hdr[77]=(n>>8)&0xFF;
+  hdr[78]=(n>>16)&0xFF; hdr[79]=(n>>24)&0xFF;
+  uint8_t mid[32];
+  mbedtls_sha256_context ctx;
+  mbedtls_sha256_init(&ctx);
+  mbedtls_sha256_starts(&ctx, 0);
+  mbedtls_sha256_update(&ctx, hdr, 80);
+  mbedtls_sha256_finish(&ctx, mid);
+  mbedtls_sha256_free(&ctx);
+  mbedtls_sha256_init(&ctx);
+  mbedtls_sha256_starts(&ctx, 0);
+  mbedtls_sha256_update(&ctx, mid, 32);
+  mbedtls_sha256_finish(&ctx, out);
+  mbedtls_sha256_free(&ctx);
+}
+
+uint32_t leadingZeros(const uint8_t* h) {
+  uint32_t c = 0;
+  for (int i = 0; i < 32; i++) {
+    if (h[i]==0) { c+=8; continue; }
+    uint8_t b = h[i];
+    while ((b&0x80)==0) { c++; b<<=1; }
+    break;
+  }
+  return c;
+}
+
+void initBlockHeader() {
+  for (int i=0; i<80; i++) hdr[i] = esp_random() & 0xFF;
+  hdr[0]=0; hdr[1]=0; hdr[2]=0; hdr[3]=0x20;
+  nonce = (uint32_t)myId * (0xFFFFFFFF / 256);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  WIFI CAPTIVE PORTAL
+// ════════════════════════════════════════════════════════════════
+void doWiFiSetup() {
+  oled_clear();
+  oled.setFont(ArialMT_Plain_10);
+  oled.drawString(0, 0, "Starting WiFi...");
+  oled_show();
+
+  bool hasSaved = (WiFi.SSID().length() > 0);
+  if (hasSaved) {
+    WiFi.begin();
+    unsigned long t = millis();
+    while (WiFi.status() != WL_CONNECTED && millis()-t < 8000)
+      delay(100);
+    if (WiFi.status() == WL_CONNECTED) {
+      wifiOk = true;
+      oled_clear();
+      oled.setFont(ArialMT_Plain_10);
+      oled.drawString(0,  0, "WiFi Connected!");
+      oled.drawString(0, 14, WiFi.localIP().toString());
+      oled_show();
+      delay(1000);
+      return;
+    }
+    Serial.println("[WIFI] Saved creds failed — portal");
+  }
+
+  WiFiManagerParameter btcParam(
+    "btc", "Bitcoin Address (optional)", "", 64);
+  WiFiManagerParameter grpParam(
+    "grp", "Group Code (optional)", "", 20);
+  WiFiManagerParameter statsParam(
+    "stats", "Share anonymous stats? (1=yes 0=no)", "0", 2);
+
+  wm.addParameter(&btcParam);
+  wm.addParameter(&grpParam);
+  wm.addParameter(&statsParam);
+
+  wm.setAPStaticIPConfig(
+    IPAddress(192,168,4,1),
+    IPAddress(192,168,4,1),
+    IPAddress(255,255,255,0));
+  wm.setTimeout(120);
+
+  wm.setAPCallback([](WiFiManager*) {
+    oled.clear();
+    oled.setTextAlignment(TEXT_ALIGN_LEFT);
+    oled.setFont(ArialMT_Plain_10);
+    oled.drawString(0,  0, "-- SOLORA SETUP --");
+    oled.drawString(0, 13, "Connect to:");
+    oled.drawString(0, 24, "Solora-Setup");
+    oled.drawString(0, 37, "Then open browser:");
+    oled.drawString(0, 50, "192.168.4.1");
+    oled.display();
+  });
+
+  wm.setSaveConfigCallback([&]() {
+    String btc = String(btcParam.getValue());
+    btc.trim();
+    if (btc.length() > 10) {
+      btcAddress = btc;
+      prefs.begin("solora", false);
+      prefs.putString("btc", btcAddress);
+      prefs.end();
+    }
+    String grp = String(grpParam.getValue());
+    grp.trim();
+    grp.toUpperCase();
+    if (grp.length() > 0) {
+      groupCode = grp;
+      prefs.begin("solora", false);
+      prefs.putString("grp", groupCode);
+      prefs.end();
+    }
+    statsOptIn = (atoi(statsParam.getValue()) == 1);
+    prefs.begin("solora", false);
+    prefs.putBool("stats", statsOptIn);
+    prefs.end();
+  });
+
+  wifiOk = wm.autoConnect("Solora-Setup");
+
+  oled_clear();
+  oled.setFont(ArialMT_Plain_10);
+  if (wifiOk) {
+    oled.drawString(0,  0, "WiFi Connected!");
+    oled.drawString(0, 14, WiFi.localIP().toString());
+    if (btcAddress.length() > 0)
+      oled.drawString(0, 28, "BTC address saved");
+  } else {
+    oled.drawString(0,  0, "No WiFi.");
+    oled.drawString(0, 14, "Worker/Relay mode.");
+  }
+  oled_show();
+  delay(1500);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  BITCOIN DATA
+// ════════════════════════════════════════════════════════════════
+void fetchBitcoinData() {
+  if (!wifiOk) return;
+  oled_clear();
+  oled.setFont(ArialMT_Plain_10);
+  oled.drawString(0, 0, "Fetching BTC data..");
+  oled_show();
+
+  WiFiClientSecure cli;
+  cli.setInsecure(); cli.setTimeout(8000);
+
+  if (cli.connect("mempool.space", 443)) {
+    cli.println("GET /api/v1/difficulty-adjustment HTTP/1.1");
+    cli.println("Host: mempool.space");
+    cli.println("User-Agent: Solora/3.7");
+    cli.println("Connection: close"); cli.println();
+    unsigned long t = millis();
+    while (!cli.available() && millis()-t < 6000) delay(10);
+    while (cli.available())
+      if (cli.readStringUntil('\n') == "\r") break;
+    String body = cli.readString(); cli.stop();
+    JsonDocument doc;
+    if (!deserializeJson(doc, body)) {
+      double d = doc["difficulty"].as<double>();
+      if (d > 0) { netDiff = d; liveData = true; }
+    }
+  }
+  delay(300);
+  if (cli.connect("mempool.space", 443)) {
+    cli.println("GET /api/blocks/tip/height HTTP/1.1");
+    cli.println("Host: mempool.space");
+    cli.println("User-Agent: Solora/3.7");
+    cli.println("Connection: close"); cli.println();
+    unsigned long t = millis();
+    while (!cli.available() && millis()-t < 5000) delay(10);
+    while (cli.available())
+      if (cli.readStringUntil('\n') == "\r") break;
+    String resp = cli.readString(); cli.stop();
+    resp.trim();
+    if (resp.length() > 0 && resp.length() < 10) {
+      uint32_t h = resp.toInt();
+      if (h > 800000) blockHeight = h;
+    }
+  }
+  if (netDiff == 0.0) netDiff = 88.0e12;
+  Serial.printf("[NET] diff=%.2e height=%lu\n",
+    netDiff, (unsigned long)blockHeight);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  MESH ID + RELAY TALLY
+// ════════════════════════════════════════════════════════════════
+void generateMeshId() {
+  prefs.begin("solora", false);
+  meshId = prefs.getString("mid", "");
+  if (meshId.length() == 0) {
+    char buf[5];
+    uint16_t randVal = (uint16_t)(esp_random() & 0xFFFF);
+    snprintf(buf, sizeof(buf), "%04X", randVal);
+    meshId = String(buf);
+    prefs.putString("mid", meshId);
+    Serial.printf("[BOOT] New MeshID: %s\n", meshId.c_str());
+  }
+  prefs.end();
+}
+
+void saveRelayTally() {
+  prefs.begin("solora", false);
+  uint32_t saved = prefs.getUInt("relays", 0);
+  prefs.putUInt("relays", saved + soloraRelays);
+  soloraTotalSaved = saved + soloraRelays;
+  soloraRelays = 0;
+  prefs.end();
+}
+
+void loadRelayTally() {
+  prefs.begin("solora", true);
+  soloraTotalSaved = prefs.getUInt("relays", 0);
+  prefs.end();
+  Serial.printf("[SOLORA] Lifetime relays: %lu\n",
+    (unsigned long)soloraTotalSaved);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ANONYMOUS STATS
+// ════════════════════════════════════════════════════════════════
+void reportStats() {
+  if (!wifiOk || !statsOptIn) return;
+  WiFiClient cli;
+  if (cli.connect("solora.network", 80)) {
+    char payload[128];
+    snprintf(payload, sizeof(payload),
+      "{\"mid\":\"%s\",\"dc\":%d,\"hr\":%lu,"
+      "\"bb\":%lu,\"fv\":\"3.7\",\"rel\":%lu}",
+      meshId.c_str(),
+      activePeers()+1,
+      (unsigned long)networkHashRate(),
+      (unsigned long)bestBits,
+      (unsigned long)(soloraTotalSaved + soloraRelays)
+    );
+    cli.printf("POST /api/stats HTTP/1.1\r\n");
+    cli.printf("Host: solora.network\r\n");
+    cli.printf("Content-Type: application/json\r\n");
+    cli.printf("Content-Length: %d\r\n\r\n", strlen(payload));
+    cli.print(payload);
+    cli.stop();
+    Serial.printf("[STATS] Reported: %s\n", payload);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  PRG BUTTON
+// ════════════════════════════════════════════════════════════════
+void checkPrgButton() {
+  static unsigned long hs  = 0;
+  static bool holding      = false;
+  static bool wasLow       = false;
+
+  bool pressed = (digitalRead(PIN_PRG) == LOW);
+
+  if (pressed) {
+    if (!holding) { holding=true; hs=millis(); wasLow=true; }
+    if (millis() - hs > 3000) {
+      oled.displayOn();
+      oled_clear();
+      oled.setFont(ArialMT_Plain_10);
+      oled.drawString(0,  0, "Clearing settings...");
+      oled.drawString(0, 16, "Release button");
+      oled_show();
+      saveRelayTally();
+      wm.resetSettings();
+      prefs.begin("solora", false);
+      prefs.clear();
+      prefs.end();
+      delay(1500);
+      ESP.restart();
+    }
+  } else {
+    if (holding && wasLow) {
+      lastButtonMs = millis();
+      if (!screenOn) {
+        screenOn = true;
+        oled.displayOn();
+        tDisp = 0; tAnim = 0;
+        refreshDisplay();
+      } else {
+        page = (page + 1) % PAGE_COUNT;
+        tDisp = 0;
+        refreshDisplay();
+        Serial.printf("[DISP] Page %d\n", page);
+      }
+      wasLow = false;
+    }
+    holding = false;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  SCREEN POWER
+// ════════════════════════════════════════════════════════════════
+void handleScreenPower() {
+  if (screenOn &&
+      millis() - lastButtonMs > SCREEN_TIMEOUT_MS) {
+    screenOn = false;
+    oled.displayOff();
+    Serial.println("[DISP] Screen off");
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  BATTERY
+// ════════════════════════════════════════════════════════════════
+float readBatt() {
+  uint32_t raw = analogRead(BAT_ADC);
+  return constrain((raw/4095.0f)*3.3f*4.9f, 0.0f, 5.0f);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  DISPLAY
+// ════════════════════════════════════════════════════════════════
+void splashScreen() {
+  oled_clear();
+  oled.setFont(ArialMT_Plain_24);
+  oled.drawString(14, 0, "SOLORA");
+  oled.setFont(ArialMT_Plain_10);
+  oled.drawString(2,  30, "Solar. LoRa. Bitcoin.");
+  oled.drawString(2,  44, "Mesh mining network");
+  oled.drawString(14, 56, "solora.network");
+  oled_show();
+  delay(2500);
+}
+
+void drawStatusBar() {
+  oled.setFont(ArialMT_Plain_10);
+  oled.setTextAlignment(TEXT_ALIGN_LEFT);
+  oled.drawString(0, 0,
+    myRole==ROLE_COORDINATOR?"COORD":
+    myRole==ROLE_RELAY?"RELAY":"WORK");
+
+  char mc[6];
+  snprintf(mc, sizeof(mc), " %dM", activePeers()+1);
+  oled.drawString(38, 0, mc);
+
+  float pct = constrain((readBatt()-3.3f)/0.9f, 0.0f, 1.0f);
+  int   bw  = (int)(20*pct);
+  oled.drawRect(104, 1, 22, 9);
+  oled.drawRect(126, 3,  2, 5);
+  if (bw > 0) oled.fillRect(105, 2, bw, 7);
+
+  if (wifiOk) oled.fillCircle(99, 5, 3);
+  else        oled.drawCircle(99, 5, 3);
+
+  oled.drawHorizontalLine(0, 12, 128);
+}
+
+void drawPage0Mining() {
+  oled.setTextAlignment(TEXT_ALIGN_LEFT);
+  oled.setFont(ArialMT_Plain_16);
+  oled.drawString(0, 14, fmtRate(hashRate));
+  oled.setFont(ArialMT_Plain_10);
+  oled.drawString(0, 31, "MY HASH RATE");
+  oled.drawRect(0, 41, 120, 8);
+  char buf[32];
+  snprintf(buf, sizeof(buf), "Net:%s",
+    fmtRate(networkHashRate()).c_str());
+  oled.drawString(0, 54, buf);
+}
+
+void drawPage1Lottery() {
+  oled.setTextAlignment(TEXT_ALIGN_LEFT);
+  oled.setFont(ArialMT_Plain_10);
+  oled.drawString(0, 14, "WIN PROBABILITY");
+  oled.setFont(ArialMT_Plain_16);
+  oled.drawString(0, 24, "1 in 10^22");
+  oled.setFont(ArialMT_Plain_10);
+  oled.drawString(0, 42, "Expected time:");
+  oled.drawString(0, 53,
+    fmtOdds(netDiff, networkHashRate()).c_str());
+}
+
+void drawPage2Network() {
+  oled.setTextAlignment(TEXT_ALIGN_LEFT);
+  oled.setFont(ArialMT_Plain_10);
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%d MINERS  %s",
+    activePeers()+1, liveData?"LIVE":"OFFLINE");
+  oled.drawString(0, 14, buf);
+  snprintf(buf, sizeof(buf), "Net: %s",
+    fmtRate(networkHashRate()).c_str());
+  oled.drawString(0, 26, buf);
+  snprintf(buf, sizeof(buf), "Block #%lu",
+    (unsigned long)blockHeight);
+  oled.drawString(0, 38, buf);
+  snprintf(buf, sizeof(buf), "Best: %lu/76 bits",
+    (unsigned long)bestBits);
+  oled.drawString(0, 50, buf);
+}
+
+void drawPage3Lora() {
+  oled.setTextAlignment(TEXT_ALIGN_LEFT);
+  oled.setFont(ArialMT_Plain_10);
+  oled.drawString(0, 14, "LORA MESH");
+  oled.drawString(0, 26, "Last TX:");
+  oled.drawString(0, 36, "Last RX:");
+  oled.drawString(0, 46, "Next TX:");
+  oled.drawString(0, 56, "Relays: ");
+}
+
+void drawPage4Status() {
+  oled.setTextAlignment(TEXT_ALIGN_LEFT);
+  oled.setFont(ArialMT_Plain_10);
+  oled.drawString(0, 14, "Pool:");
+  oled.drawString(36, 14, wifiOk ? "CONNECTED" : "OFFLINE");
+  if (btcAddress.length() > 0) {
+    String short_addr = btcAddress.substring(0, 10) + "...";
+    oled.drawString(0, 26, "BTC: " + short_addr);
+  } else {
+    oled.drawString(0, 26, "BTC: not set");
+  }
+  if (groupCode.length() > 0) {
+    char buf[24];
+    snprintf(buf, sizeof(buf), "Grp: %s", groupCode.c_str());
+    oled.drawString(0, 38, buf);
+  } else {
+    oled.drawString(0, 38, "Grp: solo");
+  }
+  char buf[32];
+  snprintf(buf, sizeof(buf), "SLR: %lu",
+    (unsigned long)(soloraTotalSaved + soloraRelays));
+  oled.drawString(0, 50, buf);
+  oled.setTextAlignment(TEXT_ALIGN_RIGHT);
+  oled.drawString(127, 56, "solora.network");
+  oled.setTextAlignment(TEXT_ALIGN_LEFT);
+}
+
+void refreshDisplay() {
+  if (!screenOn) return;
+  oled.displayOn();
+  oled_clear();
+  drawStatusBar();
+  switch(page) {
+    case 0: drawPage0Mining();  break;
+    case 1: drawPage1Lottery(); break;
+    case 2: drawPage2Network(); break;
+    case 3: drawPage3Lora();    break;
+    case 4: drawPage4Status();  break;
+  }
+  for (int i = 0; i < PAGE_COUNT; i++) {
+    int y = 15 + i*10;
+    if (i==page) oled.fillCircle(125, y, 2);
+    else         oled.drawCircle(125, y, 2);
+  }
+  oled_show();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ANIMATION TICK — 500ms, partial redraw only
+// ════════════════════════════════════════════════════════════════
+void animateTick() {
+  if (!screenOn) return;
+
+  switch(page) {
+    case 0: drawAnimPage0(); break;
+    case 1: drawAnimPage1(); break;
+    case 3: drawAnimPage3(); break;
+    case 4: {
+      oled.setColor(BLACK);
+      oled.fillCircle(122, 18, 3);
+      oled.setColor(WHITE);
+      if (wifiOk) {
+        if (pulseDot) oled.fillCircle(122, 18, 3);
+        else          oled.drawCircle(122, 18, 3);
+      } else {
+        oled.drawCircle(122, 18, 3);
+      }
+      oled_show();
+      break;
+    }
+  }
+}
+
+void drawAnimPage0() {
+  oled.setColor(BLACK);
+  oled.fillRect(0, 54, 120, 10);
+  oled.fillRect(1, 42,  118, 6);
+  oled.setColor(WHITE);
+  int vuW = (int)(vuLevel * 11.8f);
+  if (vuW > 0) oled.fillRect(1, 42, vuW, 6);
+  oled.setFont(ArialMT_Plain_10);
+  oled.setTextAlignment(TEXT_ALIGN_LEFT);
+  char buf[24];
+  snprintf(buf, sizeof(buf), "n:%08lX", (unsigned long)nonce);
+  oled.drawString(0, 54, buf);
+  oled_show();
+}
+
+void drawAnimPage1() {
+  oled.setColor(BLACK);
+  oled.fillRect(0, 53, 120, 10);
+  oled.setColor(WHITE);
+  oled.setFont(ArialMT_Plain_10);
+  oled.setTextAlignment(TEXT_ALIGN_LEFT);
+  char buf[28];
+  if (totalHashes >= 1000000ULL)
+    snprintf(buf, sizeof(buf), "%.3f MH computed",
+      totalHashes/1e6);
+  else if (totalHashes >= 1000ULL)
+    snprintf(buf, sizeof(buf), "%.1f KH computed",
+      totalHashes/1e3);
+  else
+    snprintf(buf, sizeof(buf), "%llu H computed", totalHashes);
+  oled.drawString(0, 53, buf);
+  oled_show();
+}
+
+void drawAnimPage3() {
+  unsigned long now = millis();
+  oled.setColor(BLACK);
+  oled.fillRect(55, 24, 68, 36);
+  oled.setColor(WHITE);
+  oled.setFont(ArialMT_Plain_10);
+  oled.setTextAlignment(TEXT_ALIGN_LEFT);
+  char buf[24];
+
+  if (lastTxMs > 0) {
+    uint32_t ago = (uint32_t)((now - lastTxMs) / 1000);
+    snprintf(buf, sizeof(buf), "%lus ago", (unsigned long)ago);
+  } else {
+    snprintf(buf, sizeof(buf), "none yet");
+  }
+  oled.drawString(55, 26, buf);
+
+  if (lastRxMs > 0) {
+    uint32_t ago = (uint32_t)((now - lastRxMs) / 1000);
+    snprintf(buf, sizeof(buf), "%lus %.0fdBm",
+      (unsigned long)ago, lastRssi);
+  } else {
+    snprintf(buf, sizeof(buf), "none yet");
+  }
+  oled.drawString(55, 36, buf);
+
+  if (nextTxMs > now) {
+    uint32_t countdown = (uint32_t)((nextTxMs - now) / 1000);
+    snprintf(buf, sizeof(buf), "in %lus",
+      (unsigned long)countdown);
+  } else {
+    snprintf(buf, sizeof(buf), "now");
+  }
+  oled.drawString(55, 46, buf);
+
+  snprintf(buf, sizeof(buf), "%lu",
+    (unsigned long)(soloraTotalSaved + soloraRelays));
+  oled.drawString(55, 56, buf);
+
+  oled_show();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════════════════
+String fmtRate(uint32_t r) {
+  char b[20];
+  if (r>=1000000)   snprintf(b,sizeof(b),"%.2fMH/s",r/1e6f);
+  else if (r>=1000) snprintf(b,sizeof(b),"%.1fKH/s",r/1e3f);
+  else              snprintf(b,sizeof(b),"%luH/s",(unsigned long)r);
+  return String(b);
+}
+
+String fmtOdds(double diff, uint32_t r) {
+  if (r==0||diff==0) return "Calculating...";
+  double yrs=(diff*4294967296.0)/(double)r/(365.25*86400.0);
+  char b[28];
+  if (yrs>1e12)      snprintf(b,sizeof(b),">1 trillion yrs");
+  else if (yrs>1e9)  snprintf(b,sizeof(b),"%.1f billion yrs",yrs/1e9);
+  else if (yrs>1e6)  snprintf(b,sizeof(b),"%.1f million yrs",yrs/1e6);
+  else if (yrs>1000) snprintf(b,sizeof(b),"%.0f thousand yrs",yrs/1e3);
+  else               snprintf(b,sizeof(b),"%.0f years",yrs);
+  return String(b);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  WIN SCREEN
+// ════════════════════════════════════════════════════════════════
+void winScreen() {
+  Serial.println("\n*** SOLORA — BLOCK FOUND! ***");
+  for (int i=0;i<32;i++) Serial.printf("%02x",bestHash[i]);
+  Serial.println();
+  saveRelayTally();
+  oled.displayOn(); screenOn = true;
+  for (int i=0;i<10;i++){oled.invertDisplay();delay(150);}
+  oled.normalDisplay();
+  oled_clear();
+  oled.setFont(ArialMT_Plain_16);
+  oled.drawString(0,  2, "YOU WON!!!");
+  oled.drawString(0, 20, "BLOCK FOUND!");
+  oled.setFont(ArialMT_Plain_10);
+  oled.drawString(0, 40, "Reward: 3.125 BTC");
+  if (btcAddress.length() > 0)
+    oled.drawString(0, 52,
+      btcAddress.substring(0,16) + "...");
+  else
+    oled.drawString(0, 52, "Set BTC addr first!");
+  oled_show();
+  while(true){
+    digitalWrite(PIN_LED,HIGH); delay(200);
+    digitalWrite(PIN_LED,LOW);  delay(200);
+  }
+}
