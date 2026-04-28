@@ -1,1 +1,631 @@
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
+.journal {
+  padding: 1.5rem 0;
+  font-family: var(--font-sans);
+  max-width: 680px;
+}
+
+.j-header {
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.j-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.j-date {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  letter-spacing: 0.06em;
+}
+
+.j-project {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+  border: 0.5px solid var(--color-border-tertiary);
+  letter-spacing: 0.04em;
+}
+
+.j-title {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+
+.j-subtitle {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.section {
+  margin-bottom: 1.75rem;
+}
+
+.section-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-text-tertiary);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-label::after {
+  content: '';
+  flex: 1;
+  height: 0.5px;
+  background: var(--color-border-tertiary);
+}
+
+.prose {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  line-height: 1.8;
+  margin-bottom: 10px;
+}
+
+.prose strong {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  padding: 1rem 1.25rem;
+  margin-bottom: 10px;
+}
+
+.card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.card-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--border-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.card-icon.bug    { background: #FCEBEB; color: #A32D2D; }
+.card-icon.fix    { background: #E1F5EE; color: #0F6E56; }
+.card-icon.feat   { background: #E6F1FB; color: #185FA5; }
+.card-icon.learn  { background: #EEEDFE; color: #534AB7; }
+.card-icon.deploy { background: #FAEEDA; color: #854F0B; }
+.card-icon.brand  { background: #FBEAF0; color: #993556; }
+
+.card-head {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+}
+
+.card-sub {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  padding-left: 38px;
+}
+
+.code-block {
+  background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-primary);
+  line-height: 1.7;
+  margin: 8px 0 8px 38px;
+}
+
+.kw { color: #185FA5; }
+.cm { color: var(--color-text-tertiary); font-style: italic; }
+.nm { color: #854F0B; }
+.st { color: #0F6E56; }
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  padding-left: 38px;
+}
+
+.tag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.03em;
+}
+
+.tag-orange { background: #FAEEDA; color: #854F0B; }
+.tag-blue   { background: #E6F1FB; color: #185FA5; }
+.tag-green  { background: #E1F5EE; color: #0F6E56; }
+.tag-purple { background: #EEEDFE; color: #534AB7; }
+.tag-pink   { background: #FBEAF0; color: #993556; }
+
+.metric-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.metric {
+  background: var(--color-background-secondary);
+  border-radius: var(--border-radius-md);
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.metric-n {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+.metric-l {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  margin-top: 4px;
+  letter-spacing: 0.05em;
+}
+
+.metric-n.orange { color: #f7931a; }
+.metric-n.blue   { color: #009FDB; }
+.metric-n.green  { color: #1D9E75; }
+.metric-n.purple { color: #7F77DD; }
+
+.checklist { margin: 0; padding: 0; list-style: none; }
+
+.check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+.check-item:last-child { border-bottom: none; }
+
+.check-box {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+
+.check-box.done { background: #1D9E75; color: #fff; }
+.check-box.open { border: 1.5px solid var(--color-border-secondary); }
+
+.check-item.done-item { color: var(--color-text-primary); }
+
+.reflection-card {
+  background: var(--color-background-secondary);
+  border-left: 2px solid #f7931a;
+  border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+}
+
+.reflection-q {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 5px;
+}
+
+.reflection-a {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+}
+
+.ask-btn {
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: var(--border-radius-md);
+  border: 0.5px solid var(--color-border-secondary);
+  background: var(--color-background-primary);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  margin-top: 6px;
+  display: inline-block;
+}
+
+.ask-btn:hover { background: var(--color-background-secondary); }
+
+.timeline {
+  position: relative;
+  padding-left: 20px;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--color-border-tertiary);
+}
+
+.tl-item {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+.tl-dot {
+  position: absolute;
+  left: -16px;
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.tl-dot.orange { background: #f7931a; }
+.tl-dot.blue   { background: #009FDB; }
+.tl-dot.green  { background: #1D9E75; }
+.tl-dot.purple { background: #7F77DD; }
+.tl-dot.pink   { background: #D4537E; }
+.tl-dot.amber  { background: #BA7517; }
+
+.tl-time {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  margin-bottom: 3px;
+  letter-spacing: 0.04em;
+}
+
+.tl-head {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin-bottom: 2px;
+}
+
+.tl-body {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.footer {
+  border-top: 0.5px solid var(--color-border-tertiary);
+  padding-top: 1rem;
+  margin-top: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.next-session {
+  background: var(--color-background-secondary);
+  border-radius: var(--border-radius-md);
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.next-session strong {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+</style>
+
+<div class="journal">
+<h2 class="sr-only">Solora developer engineering journal entry for April 27 2026</h2>
+
+<div class="j-header">
+  <div class="j-meta">
+    <span class="j-date">Sunday, April 27, 2026</span>
+    <span class="j-project">SOLORA v3.7</span>
+  </div>
+  <div class="j-title">Full build day — firmware, mesh, branding, and web infrastructure</div>
+  <div class="j-subtitle">A productive session that took the project from working prototype to named, branded, open source product with live website.</div>
+</div>
+
+<div class="metric-row">
+  <div class="metric"><div class="metric-n orange">16</div><div class="metric-l">milestones</div></div>
+  <div class="metric"><div class="metric-n blue">3</div><div class="metric-l">devices live</div></div>
+  <div class="metric"><div class="metric-n green">v3.7</div><div class="metric-l">firmware</div></div>
+  <div class="metric"><div class="metric-n purple">5</div><div class="metric-l">OLED pages</div></div>
+</div>
+
+<div class="section">
+  <div class="section-label">daily timeline</div>
+  <div class="timeline">
+
+    <div class="tl-item">
+      <div class="tl-dot orange"></div>
+      <div class="tl-time">Morning</div>
+      <div class="tl-head">Removed Heltec unofficial library</div>
+      <div class="tl-body">Switched to RadioLib directly. All four required libraries confirmed and installed via Arduino Library Manager.</div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-dot blue"></div>
+      <div class="tl-time">Mid morning</div>
+      <div class="tl-head">3 devices communicating on LoRa mesh</div>
+      <div class="tl-body">Fixed deduplication bug — sequence-number approach was dropping all heartbeats after the first. Rewrote as 25s time window. Fixed boot bug where lastCoordHeard=0 caused immediate failover.</div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-dot green"></div>
+      <div class="tl-time">Late morning</div>
+      <div class="tl-head">Power optimization — 3x battery life improvement</div>
+      <div class="tl-body">WiFi off on workers saves ~100mA. CPU 160MHz on workers. LoRa 14dBm on workers. Screen timeout 2 minutes. Coordinator failover with ID-based election.</div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-dot purple"></div>
+      <div class="tl-time">Afternoon</div>
+      <div class="tl-head">Complete v3.7 firmware with 5 animated OLED pages</div>
+      <div class="tl-body">Two-speed display system: 500ms animation tick + 30s data refresh. Pioneer relay tally in flash. Bitcoin address and group code in captive portal. Anonymous stats opt-in.</div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-dot pink"></div>
+      <div class="tl-time">Late afternoon</div>
+      <div class="tl-head">Named the product — Solora. Logo designed.</div>
+      <div class="tl-body">Solar + LoRa. SolarBit taken. ROAM taken by Solana/Samsung. Logo gradient from Bitcoin orange to LoRa blue. Core philosophy defined: the device works for its owner, not its maker.</div>
+    </div>
+
+    <div class="tl-item">
+      <div class="tl-dot amber"></div>
+      <div class="tl-time">Evening</div>
+      <div class="tl-head">solora.network live. GitHub open sourced.</div>
+      <div class="tl-body">Namecheap domain → Cloudflare DNS → Worker serving index.html. github.com/solarlora/solora created. v3.7 firmware and logo uploaded. MIT license.</div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">problems encountered + solutions</div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="card-icon bug">✕</div>
+      <div class="card-head">Deduplication dropping all heartbeats after first packet</div>
+    </div>
+    <div class="card-sub">Sequence-number approach used buf[3] as the sequence ID. In HeartbeatPacket buf[3] is the role field — always 0, 1, or 2. Every heartbeat from the same device had the same sequence ID so all were dropped as duplicates after the first.</div>
+    <div class="code-block"><span class="cm">// Bug — role field used as sequence number</span>
+<span class="kw">uint8_t</span> seq = (len &gt; <span class="nm">3</span>) ? buf[<span class="nm">3</span>] : <span class="nm">0</span>;
+<span class="kw">if</span> (alreadySeen(orig, seq, type)) <span class="kw">return</span>;</div>
+    <div class="card-sub">Solution: rewrote deduplication as a time-based 25 second window per origin+type. No sequence number needed — if the same device type of packet arrives within 25s it's a duplicate. After 25s it's a new packet and gets relayed.</div>
+    <div class="code-block"><span class="cm">// Fix — time window, no sequence number</span>
+<span class="kw">if</span> (now - seen[i].seenAt &lt; <span class="nm">25000UL</span>)
+  <span class="kw">return true</span>; <span class="cm">// drop duplicate</span></div>
+    <div class="tag-row">
+      <span class="tag tag-orange">root cause found</span>
+      <span class="tag tag-green">resolved</span>
+      <span class="tag tag-blue">mesh</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="card-icon bug">✕</div>
+      <div class="card-head">Dual coordinator on boot — both devices promoting simultaneously</div>
+    </div>
+    <div class="card-sub">lastCoordHeard initialized to 0. On boot millis() - lastCoordHeard was a huge number immediately triggering the failover check and promoting both devices to coordinator before they had a chance to hear each other.</div>
+    <div class="card-sub" style="margin-top:6px;">Solution: initialize lastCoordHeard = millis() in setup(). Devices now listen for the full 10 second role determination window before any failover logic runs.</div>
+    <div class="tag-row">
+      <span class="tag tag-orange">boot timing bug</span>
+      <span class="tag tag-green">resolved</span>
+      <span class="tag tag-blue">mesh</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="card-icon bug">✕</div>
+      <div class="card-head">HeartbeatPacket struct size changed — broke mesh communication</div>
+    </div>
+    <div class="card-sub">Removed the localHour field from HeartbeatPacket when time sync was stripped out. This changed the struct size from 25 to 24 bytes. The len >= sizeof(HeartbeatPacket) check on receivers failed silently — all heartbeats dropped.</div>
+    <div class="card-sub" style="margin-top:6px;">Solution: replaced localHour with a reserved uint8_t field that keeps the struct size stable. Added comment warning not to remove it.</div>
+    <div class="code-block"><span class="kw">uint8_t</span> reserved; <span class="cm">// keeps size stable — do not remove</span></div>
+    <div class="tag-row">
+      <span class="tag tag-orange">struct alignment bug</span>
+      <span class="tag tag-green">resolved</span>
+      <span class="tag tag-blue">firmware</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="card-icon fix">✓</div>
+      <div class="card-head">Website showing hardcoded placeholder stats</div>
+    </div>
+    <div class="card-sub">index.html catch block was showing '3', '1.2 MH/s', '1' when the API was unavailable. Since the Cloudflare KV stats API hasn't been built yet this meant the site always showed fake data regardless of reality.</div>
+    <div class="card-sub" style="margin-top:6px;">Solution: replaced hardcoded values with dashes. Added a "Live network stats coming soon" note that hides automatically once the API is live.</div>
+    <div class="tag-row">
+      <span class="tag tag-amber">honesty fix</span>
+      <span class="tag tag-green">resolved today</span>
+      <span class="tag tag-purple">website</span>
+    </div>
+  </div>
+
+</div>
+
+<div class="section">
+  <div class="section-label">what was learned</div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="card-icon learn">L</div>
+      <div class="card-head">Packed structs are fragile — any size change breaks the mesh</div>
+    </div>
+    <div class="card-sub">When every device on the mesh uses sizeof() to validate incoming packets, a one-byte change anywhere in a struct silently breaks all communication between old and new firmware. Lesson: never remove fields from packed structs — mark unused fields as reserved instead. Always flash all devices with the same firmware version.</div>
+    <button class="ask-btn" onclick="sendPrompt('What are best practices for versioning packed structs in embedded mesh networks?')">Ask Claude ↗</button>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="card-icon learn">L</div>
+      <div class="card-head">Time-based deduplication is more robust than sequence numbers for LoRa</div>
+    </div>
+    <div class="card-sub">Sequence numbers only work reliably when packet fields are stable and well-defined. LoRa mesh packets share a common 3-byte header but the 4th byte means something different in each packet type. A time window deduplicator works purely on origin ID and packet type — no field misinterpretation possible.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="card-icon learn">L</div>
+      <div class="card-head">WiFi mode off saves more power than any other single change</div>
+    </div>
+    <div class="card-sub">WiFi radio in idle/scanning state draws ~80-100mA even when not connected or transmitting. Calling WiFi.mode(WIFI_OFF) after role assignment on workers was the single biggest power saving — more than CPU frequency reduction and LoRa power combined. Critical for solar operation.</div>
+    <button class="ask-btn" onclick="sendPrompt('What is the full power breakdown of the ESP32-S3 components at different modes?')">Ask Claude ↗</button>
+  </div>
+
+</div>
+
+<div class="section">
+  <div class="section-label">decisions made</div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="card-icon feat">D</div>
+      <div class="card-head">MAX_HOPS = 3 as the permanent setting</div>
+    </div>
+    <div class="card-sub">Evaluated tradeoffs between range and collision risk. At 3 hops: ~45 mile range, low collision probability, stays well within LoRa 1% duty cycle limits. At 6 hops: ~90 miles but exponentially increasing duplicate cascade risk. 3 hops is the right balance for a consumer product.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="card-icon feat">D</div>
+      <div class="card-head">Time sync via LoRa removed — simplifies firmware significantly</div>
+    </div>
+    <div class="card-sub">NTP time sync via LoRa added complexity, a new packet type, timezone handling, and a dependency on the coordinator having internet. Removing it entirely and replacing with a simple 2-minute screen timeout achieved the same power saving goal without any of the complexity.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="card-icon brand">★</div>
+      <div class="card-head">Product named Solora — Solar + LoRa</div>
+    </div>
+    <div class="card-sub">Evaluated: SolarBit (taken — BitAxe project), ROAM (taken — Solana/Samsung WiFi network), LoraCoin (dead token, 2 holders), MESHSAT, GRIDLESS, DRIFT. Solora won: instantly understood, globally pronounceable, sounds like hardware not a coin, available on .network TLD which perfectly describes the product.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <div class="card-icon feat">D</div>
+      <div class="card-head">Each device mines with owner's own Bitcoin address — never ours</div>
+    </div>
+    <div class="card-sub">Rejected Option B (all devices point to our address, we distribute). Creates money transmission liability, securities law exposure, and dependency on us forever. Correct architecture: each customer enters their own BTC address at setup. Mining pool pays them directly. We never touch the money at any point.</div>
+    <button class="ask-btn" onclick="sendPrompt('What are the legal considerations for a Bitcoin mining hardware product where customers earn directly?')">Ask Claude ↗</button>
+  </div>
+
+</div>
+
+<div class="section">
+  <div class="section-label">completed today</div>
+  <div class="card" style="padding: 0.75rem 1.25rem;">
+    <ul class="checklist">
+      <li class="check-item done-item"><div class="check-box done">✓</div>Removed Heltec unofficial library — switched to RadioLib</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>3 devices communicating on LoRa mesh</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>Deduplication rewritten — time-based 25s window</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>Coordinator failover with ID election and auto-demotion</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>WiFi off workers — ~100mA saved</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>CPU 160MHz workers, 240MHz coordinator</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>v3.7 firmware — 5 animated OLED pages</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>Pioneer relay tally stored in flash</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>Bitcoin address + group code in captive portal</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>Anonymous stats opt-in system</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>Product named Solora — philosophy defined</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>Logo designed — orange to LoRa blue gradient</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>solora.network registered and live</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>github.com/solarlora/solora created — MIT license</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>Firmware v3.7 uploaded to GitHub</li>
+      <li class="check-item done-item"><div class="check-box done">✓</div>Website placeholder stats replaced with honest dashes</li>
+    </ul>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">next session priorities</div>
+  <div class="card" style="padding: 0.75rem 1.25rem;">
+    <ul class="checklist">
+      <li class="check-item"><div class="check-box open"></div>Cloudflare KV stats API — devices report in to solora.network</li>
+      <li class="check-item"><div class="check-box open"></div>Connect coordinator to ckpool.org via Stratum — real Bitcoin mining</li>
+      <li class="check-item"><div class="check-box open"></div>Raspberry Pi + RYLR998 — local mesh dashboard</li>
+      <li class="check-item"><div class="check-box open"></div>Peer tracking fix — HB_INTERVAL 20s, timeout 45s</li>
+      <li class="check-item"><div class="check-box open"></div>3D printed enclosure design</li>
+      <li class="check-item"><div class="check-box open"></div>Post to Hackster.io — start building community</li>
+    </ul>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">reflection</div>
+
+  <div class="reflection-card">
+    <div class="reflection-q">What went well?</div>
+    <div class="reflection-a">The deduplication rewrite was the key unlock — once that was fixed the mesh became reliable and everything else built on top of it cleanly. The decision to remove time sync entirely rather than patch it was the right call. Simpler is more reliable. The brand and website coming together in a single session gave the project a real identity it lacked before.</div>
+  </div>
+
+  <div class="reflection-card">
+    <div class="reflection-q">What was the hardest problem?</div>
+    <div class="reflection-a">The struct size bug was the most subtle. The firmware compiled without errors, uploaded fine, and appeared to run correctly — but the mesh was silently dropping all heartbeats. Finding it required going back through all the changes that had been made and counting bytes manually. Key lesson: when mesh communication breaks after a firmware change, check struct sizes first.</div>
+  </div>
+
+  <div class="reflection-card">
+    <div class="reflection-q">What would you do differently?</div>
+    <div class="reflection-a">Should have locked the packet struct sizes earlier with a static assert. In C++ you can add compile-time verification: static_assert(sizeof(HeartbeatPacket) == 25, "HeartbeatPacket size changed"). This would have caught the byte size change immediately at compile time rather than at runtime debugging.</div>
+  </div>
+
+  <div class="reflection-card">
+    <div class="reflection-q">Biggest insight of the day?</div>
+    <div class="reflection-a">The product philosophy — "the device works for its owner, not for its maker" — emerged organically from a series of individual technical and legal decisions. It wasn't planned. By the end of the day every decision made independently pointed back to the same principle. That consistency is what makes the product coherent.</div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <span>Solora · April 27, 2026 · solora.network</span>
+  <div class="next-session"><strong>Next:</strong> Cloudflare KV API + ckpool Stratum</div>
+</div>
+
+</div>
