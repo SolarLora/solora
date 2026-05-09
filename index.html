@@ -2,133 +2,148 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
   <title>SOLORA — Solar Bitcoin Mesh Miner</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{background:#0a0e12;color:#e8edf2;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;padding:24px 16px;min-height:100vh}
+    body{background:#f5f4f1;color:#1a1a1a;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;padding:24px 16px;min-height:100vh}
     .page{max-width:1400px;margin:0 auto}
 
-    /* Logo */
-    .logo-wrap{text-align:center;margin-bottom:4px}
-    .logo-wrap svg{width:160px;height:auto}
-    .tagline{font-size:9px;letter-spacing:.2em;color:#f7931a;text-align:center;margin-bottom:2px}
-    .url-sub{font-size:9px;color:#5a6e7c;text-align:center;margin-bottom:20px}
+    /* Logo - Fixed */
+    .logo-wrap{text-align:center;margin-bottom:4px;padding:0 20px}
+    .logo-wrap svg{width:180px;height:auto;max-width:100%}
+    .tagline{font-size:9px;letter-spacing:.2em;color:#005f8c;text-align:center;margin-bottom:2px;font-weight:700}
+    .url-sub{font-size:9px;color:#999;text-align:center;margin-bottom:20px}
 
     /* Stats bar */
     .stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
-    .stat-card{background:#141a20;border:1px solid #2a3540;border-radius:12px;padding:14px 10px;text-align:center}
+    .stat-card{background:#fff;border:1px solid #e0ddd8;border-radius:12px;padding:14px 10px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,.03)}
     .stat-value{font-size:1.6rem;font-weight:700;display:block;margin-bottom:6px}
-    .stat-value.orange{color:#f7931a}
-    .stat-value.blue{color:#3b82f6}
-    .stat-value.green{color:#10b981}
-    .stat-value.purple{color:#a855f7}
-    .stat-label{font-size:.65rem;color:#8a9aaa;text-transform:uppercase;letter-spacing:.08em}
-    .stat-sub{font-size:.55rem;color:#5a6e7c;margin-top:4px}
+    .stat-value.orange{color:#e07810}
+    .stat-value.blue{color:#007ab5}
+    .stat-value.green{color:#1a8050}
+    .stat-value.purple{color:#6030a0}
+    .stat-label{font-size:.65rem;color:#666;text-transform:uppercase;letter-spacing:.08em}
+    .stat-sub{font-size:.55rem;color:#aaa;margin-top:4px}
 
-    /* Refresh */
-    .refresh-bar{height:2px;background:#1e2832;border-radius:2px;margin-bottom:16px;overflow:hidden}
-    .refresh-fill{height:100%;background:#f7931a;width:100%;transition:width .3s linear}
-    .refresh-info{display:flex;justify-content:space-between;margin-bottom:20px;font-size:.65rem;color:#5a6e7c}
+    /* Refresh - Digital countdown with circle */
+    .refresh-container{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;background:#fff;border:1px solid #e0ddd8;border-radius:10px;padding:8px 16px}
+    .refresh-status{display:flex;align-items:center;gap:8px}
+    .refresh-dot{width:8px;height:8px;border-radius:50%;background:#1a8050;display:inline-block;animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    .refresh-dot.offline{background:#ccc;animation:none}
+    .refresh-text{font-size:.7rem;color:#666}
+    .countdown-wrap{display:flex;align-items:center;gap:10px}
+    .countdown-circle{position:relative;width:32px;height:32px}
+    .countdown-svg{transform:rotate(-90deg)}
+    .countdown-bg{stroke:#e8e5e0;stroke-width:3;fill:none}
+    .countdown-fill{stroke:#e07810;stroke-width:3;fill:none;stroke-linecap:round;transition:stroke-dasharray .1s linear}
+    .countdown-text{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:.65rem;font-weight:700;color:#e07810}
+    .countdown-label{font-size:.65rem;color:#999}
 
     /* Section */
-    .section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-    .section-title{font-size:.7rem;font-weight:700;color:#f7931a;letter-spacing:.1em}
-    .section-count{font-size:.65rem;color:#5a6e7c}
+    .section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;margin-top:8px}
+    .section-title{font-size:.7rem;font-weight:700;color:#e07810;letter-spacing:.1em}
+    .section-count{font-size:.65rem;color:#999}
 
     /* Mesh card - compact */
-    .mesh-card{background:#141a20;border:1px solid #2a3540;border-radius:10px;margin-bottom:10px;overflow:hidden}
-    .mesh-card.online{border-left:3px solid #10b981}
+    .mesh-card{background:#fff;border:1px solid #e0ddd8;border-radius:12px;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);transition:all .2s}
+    .mesh-card:hover{box-shadow:0 2px 6px rgba(0,0,0,.1)}
+    .mesh-card.online{border-left:3px solid #1a8050}
     .mesh-card.offline{opacity:.5}
-    .mesh-card.python{border-left:3px solid #8b5cf6;opacity:.7}
+    .mesh-card.solo{border-left:3px solid #007ab5}
 
     /* Card header - single line */
-    .card-row{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:10px 14px;background:#0d1217;border-bottom:1px solid #2a3540}
-    .mesh-id{font-family:'Courier New',monospace;font-weight:700;color:#f7931a;font-size:.85rem}
-    .mesh-status{font-size:.6rem;padding:2px 8px;border-radius:12px}
-    .mesh-status.online{background:#10b98120;color:#10b981}
-    .mesh-status.offline{background:#5a6e7c20;color:#8a9aaa}
-    .mesh-status.python{background:#8b5cf620;color:#a78bfa}
+    .card-row{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:10px 14px;background:#fafaf8;border-bottom:1px solid #e8e5e0}
+    .mesh-id{font-family:'Courier New',monospace;font-weight:700;color:#e07810;font-size:.85rem}
+    .mesh-status{font-size:.6rem;padding:2px 8px;border-radius:12px;font-weight:600}
+    .mesh-status.online{background:#e6f5ee;color:#1a8050}
+    .mesh-status.offline{background:#f0ede8;color:#aaa}
+    .mesh-status.solo{background:#e6f0f5;color:#007ab5}
     .card-stats{display:flex;flex-wrap:wrap;gap:12px;font-size:.7rem}
     .stat-badge{display:flex;align-items:center;gap:4px}
-    .stat-badge-label{color:#5a6e7c}
-    .stat-badge-value{color:#e8edf2;font-weight:600}
-    .stat-badge-value.highlight{color:#f7931a}
-    .stat-badge-value.bits{color:#3b82f6}
+    .stat-badge-label{color:#999}
+    .stat-badge-value{color:#333;font-weight:600}
+    .stat-badge-value.highlight{color:#e07810}
+    .stat-badge-value.bits{color:#007ab5}
 
     /* Device tree - compact single line */
-    .device-tree{padding:8px 14px}
-    .coord-line{display:flex;align-items:center;gap:10px;padding:6px 10px;background:#1a222a;border-radius:8px;margin-bottom:6px}
-    .coord-icon{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#f7931a,#e06c00);display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
+    .device-tree{padding:10px 14px}
+    .coord-line{display:flex;align-items:center;gap:10px;padding:6px 10px;background:#fff8f0;border-radius:8px;margin-bottom:6px;border:1px solid #f0d8b8}
+    .coord-icon{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#e07810,#c06010);display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
     .coord-details{flex:1;display:flex;align-items:center;flex-wrap:wrap;gap:12px}
-    .coord-role{font-size:.6rem;font-weight:700;color:#f7931a}
-    .coord-id{font-family:'Courier New',monospace;font-size:.7rem;color:#e8edf2}
-    .coord-hr{font-size:.65rem;color:#8a9aaa}
-    .coord-hr strong{color:#f7931a}
+    .coord-role{font-size:.6rem;font-weight:700;color:#e07810}
+    .coord-id{font-family:'Courier New',monospace;font-size:.7rem;color:#333}
+    .coord-hr{font-size:.65rem;color:#888}
+    .coord-hr strong{color:#e07810}
 
     .workers-tree{margin-left:22px;position:relative;padding-left:12px}
-    .workers-tree::before{content:'';position:absolute;left:0;top:0;bottom:0;width:1px;background:#2a3540}
-    .worker-line{display:flex;align-items:center;gap:10px;padding:5px 10px;margin:3px 0;background:#0f151b;border-radius:6px;position:relative}
-    .worker-line::before{content:'';position:absolute;left:-12px;top:50%;width:12px;height:1px;background:#2a3540}
-    .worker-icon{width:22px;height:22px;border-radius:50%;background:#2a3540;display:flex;align-items:center;justify-content:center;font-size:9px;color:#8a9aaa}
+    .workers-tree::before{content:'';position:absolute;left:0;top:0;bottom:0;width:1px;background:#e0ddd8}
+    .worker-line{display:flex;align-items:center;gap:10px;padding:5px 10px;margin:3px 0;background:#fafaf8;border-radius:6px;position:relative;border:1px solid #f0ede8}
+    .worker-line::before{content:'';position:absolute;left:-12px;top:50%;width:12px;height:1px;background:#e0ddd8}
+    .worker-icon{width:22px;height:22px;border-radius:50%;background:#f0ede8;display:flex;align-items:center;justify-content:center;font-size:9px;color:#999}
     .worker-details{flex:1;display:flex;align-items:center;flex-wrap:wrap;gap:12px}
-    .worker-role{font-size:.55rem;font-weight:700;color:#3b82f6}
-    .worker-id{font-family:'Courier New',monospace;font-size:.65rem;color:#e8edf2}
-    .worker-hr{font-size:.6rem;color:#8a9aaa}
-    .no-workers{font-size:.65rem;color:#5a6e7c;padding:8px;text-align:center;font-style:italic}
+    .worker-role{font-size:.55rem;font-weight:700;color:#007ab5}
+    .worker-id{font-family:'Courier New',monospace;font-size:.65rem;color:#333}
+    .worker-hr{font-size:.6rem;color:#888}
+    .no-workers{font-size:.65rem;color:#aaa;padding:8px;text-align:center;font-style:italic}
 
     /* Lifetime banner */
-    .lifetime-bar{padding:6px 14px;background:#1a0e08;border-top:1px solid #2a1a10;font-size:.65rem;color:#8a6e5a}
-    .lifetime-bar strong{color:#f7931a}
+    .lifetime-bar{padding:6px 14px;background:#fff8f0;border-top:1px solid #f0d8b8;font-size:.65rem;color:#888}
+    .lifetime-bar strong{color:#e07810}
 
     /* Progress */
-    .bits-progress{height:2px;background:#1e2832;margin:0 14px 8px 14px;border-radius:2px}
-    .bits-fill{height:100%;background:linear-gradient(90deg,#f7931a,#3b82f6);border-radius:2px;transition:width .3s}
+    .bits-progress{height:2px;background:#e8e5e0;margin:0 14px 8px 14px;border-radius:2px}
+    .bits-fill{height:100%;background:linear-gradient(90deg,#e07810,#007ab5);border-radius:2px;transition:width .3s}
 
     /* Expandable detail */
-    .card-detail{display:none;padding:12px 14px;border-top:1px solid #2a3540;background:#0d1217;font-size:.65rem}
+    .card-detail{display:none;padding:12px 14px;border-top:1px solid #e8e5e0;background:#fafaf8;font-size:.65rem}
     .card-detail.open{display:block}
     .detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
-    .detail-item{display:flex;justify-content:space-between;padding:4px 0}
-    .detail-item span:first-child{color:#5a6e7c}
-    .detail-item span:last-child{color:#e8edf2}
+    .detail-item{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f0ede8}
+    .detail-item span:first-child{color:#888}
+    .detail-item span:last-child{color:#333;font-weight:500}
 
     /* All-time banner */
-    .alltime-banner{background:linear-gradient(135deg,#1a0e08,#0d1217);border:1px solid #2a1a10;border-radius:10px;padding:10px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px}
+    .alltime-banner{background:#fff8f0;border:1px solid #f0d8b8;border-radius:10px;padding:10px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px}
     .alltime-icon{font-size:1.2rem}
-    .alltime-text{font-size:.7rem;color:#8a9aaa}
-    .alltime-text strong{color:#f7931a}
+    .alltime-text{font-size:.7rem;color:#888}
+    .alltime-text strong{color:#e07810}
 
     /* Description */
-    .description{font-size:.75rem;color:#8a9aaa;text-align:center;max-width:600px;margin:24px auto;line-height:1.6}
-    .highlight{color:#f7931a}
-    .highlight-blue{color:#3b82f6}
+    .description{font-size:.75rem;color:#666;text-align:center;max-width:600px;margin:24px auto;line-height:1.6}
+    .highlight{color:#e07810}
+    .highlight-blue{color:#007ab5}
 
     /* Links */
     .links{display:flex;gap:10px;justify-content:center;margin-bottom:28px}
-    .link-btn{background:transparent;border:1px solid #2a3540;border-radius:8px;color:#8a9aaa;padding:6px 14px;font-size:.65rem;text-decoration:none;transition:all .2s}
-    .link-btn:hover{border-color:#f7931a;color:#f7931a}
+    .link-btn{background:transparent;border:1px solid #ccc;border-radius:8px;color:#888;padding:6px 14px;font-size:.65rem;text-decoration:none;transition:all .2s;font-family:monospace}
+    .link-btn:hover{border-color:#e07810;color:#e07810}
 
     /* Lookup */
-    .lookup-box{background:#141a20;border:1px solid #2a3540;border-radius:12px;padding:20px;max-width:440px;margin:0 auto 28px}
-    .lookup-box h3{font-size:.7rem;color:#f7931a;margin-bottom:12px}
+    .lookup-box{background:#fff;border:1px solid #e0ddd8;border-radius:12px;padding:20px;max-width:440px;margin:0 auto 28px}
+    .lookup-box h3{font-size:.7rem;color:#e07810;margin-bottom:12px;letter-spacing:.1em}
     .lookup-row{display:flex;gap:8px}
-    .lookup-input{flex:1;background:#0d1217;border:1px solid #2a3540;border-radius:8px;color:#f7931a;font-family:'Courier New',monospace;font-size:.9rem;padding:8px 12px;text-transform:uppercase}
-    .lookup-input:focus{border-color:#f7931a;outline:none}
-    .lookup-btn{background:#f7931a;border:none;border-radius:8px;color:#0a0e12;font-weight:700;padding:8px 14px;font-size:.65rem;cursor:pointer}
-    .lookup-result{margin-top:12px;font-size:.65rem;color:#8a9aaa;display:none}
+    .lookup-input{flex:1;background:#fafaf8;border:1px solid #ddd;border-radius:8px;color:#e07810;font-family:'Courier New',monospace;font-size:.9rem;padding:8px 12px;text-transform:uppercase}
+    .lookup-input:focus{border-color:#e07810;outline:none}
+    .lookup-btn{background:#e07810;border:none;border-radius:8px;color:#fff;font-weight:700;padding:8px 14px;font-size:.65rem;cursor:pointer;transition:background .2s}
+    .lookup-btn:hover{background:#c06010}
+    .lookup-result{margin-top:12px;font-size:.65rem;color:#888;display:none}
 
-    hr.divider{border:none;border-top:1px solid #1e2832;margin:24px 0}
+    hr.divider{border:none;border-top:1px solid #e8e5e0;margin:24px 0}
     .principles{max-width:520px;margin:0 auto 24px}
-    .principle{display:flex;gap:8px;padding:6px 0;font-size:.65rem;color:#8a9aaa;border-bottom:1px solid #1e2832}
-    .principle-dot{color:#f7931a}
-    .footer{text-align:center;font-size:.6rem;color:#5a6e7c;margin-top:24px}
-    .empty-state{text-align:center;padding:40px;color:#5a6e7c;background:#141a20;border-radius:12px;border:1px solid #2a3540}
+    .principle{display:flex;gap:8px;padding:6px 0;font-size:.65rem;color:#777;border-bottom:1px solid #f0ede8}
+    .principle-dot{color:#e07810}
+    .footer{text-align:center;font-size:.6rem;color:#bbb;margin-top:24px;line-height:1.8}
+    .footer a{color:#aaa;text-decoration:none}
+    .footer a:hover{color:#e07810}
+    .empty-state{text-align:center;padding:40px;color:#bbb;background:#fff;border-radius:12px;border:1px solid #e0ddd8}
 
     @media(max-width:640px){
       .stats-grid{grid-template-columns:repeat(2,1fr)}
       .card-row{flex-direction:column;align-items:flex-start}
       .coord-details,.worker-details{gap:8px}
+      .logo-wrap svg{width:140px}
     }
   </style>
 </head>
@@ -136,14 +151,47 @@
 <div class="page">
 
   <div class="logo-wrap">
-    <svg viewBox="0 0 340 290" xmlns="http://www.w3.org/2000/svg" width="140" height="auto">
-      <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="290"><stop offset="0%" stop-color="#f7931a"/><stop offset="100%" stop-color="#009FDB"/></linearGradient></defs>
+    <svg viewBox="0 0 340 290" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="0" y2="290" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#f7931a"/>
+          <stop offset="48%" stop-color="#d4621a"/>
+          <stop offset="100%" stop-color="#009FDB"/>
+        </linearGradient>
+      </defs>
       <circle cx="170" cy="80" r="32" fill="url(#g1)"/>
       <g stroke="url(#g1)" stroke-width="3" stroke-linecap="round" opacity=".9">
-        <line x1="170" y1="38" x2="170" y2="26"/><line x1="170" y1="122" x2="170" y2="134"/>
-        <line x1="128" y1="80" x2="116" y2="80"/><line x1="212" y1="80" x2="224" y2="80"/>
+        <line x1="170" y1="38" x2="170" y2="26"/>
+        <line x1="170" y1="122" x2="170" y2="134"/>
+        <line x1="128" y1="80" x2="116" y2="80"/>
+        <line x1="212" y1="80" x2="224" y2="80"/>
+        <line x1="143" y1="53" x2="134" y2="44"/>
+        <line x1="197" y1="107" x2="206" y2="116"/>
+        <line x1="197" y1="53" x2="206" y2="44"/>
+        <line x1="143" y1="107" x2="134" y2="116"/>
       </g>
-      <text x="170" y="272" text-anchor="middle" font-family="monospace" font-size="44" font-weight="700" letter-spacing="10" fill="url(#g1)">SOLORA</text>
+      <g fill="none" stroke-linecap="round">
+        <path d="M130 62 A48 48 0 0 0 130 98" stroke="url(#g1)" stroke-width="3" opacity=".8"/>
+        <path d="M110 50 A72 72 0 0 0 110 110" stroke="url(#g1)" stroke-width="2.2" opacity=".48"/>
+        <path d="M210 62 A48 48 0 0 1 210 98" stroke="url(#g1)" stroke-width="3" opacity=".8"/>
+        <path d="M230 50 A72 72 0 0 1 230 110" stroke="url(#g1)" stroke-width="2.2" opacity=".48"/>
+      </g>
+      <circle cx="170" cy="185" r="6" fill="url(#g1)"/>
+      <circle cx="170" cy="162" r="4.5" fill="url(#g1)" opacity=".8"/>
+      <circle cx="190" cy="173" r="4.5" fill="url(#g1)" opacity=".8"/>
+      <circle cx="190" cy="197" r="4.5" fill="url(#g1)" opacity=".8"/>
+      <circle cx="170" cy="208" r="4.5" fill="url(#g1)" opacity=".8"/>
+      <circle cx="150" cy="197" r="4.5" fill="url(#g1)" opacity=".8"/>
+      <circle cx="150" cy="173" r="4.5" fill="url(#g1)" opacity=".8"/>
+      <g stroke="url(#g1)" stroke-width="1.4" opacity=".45" fill="none">
+        <line x1="170" y1="185" x2="170" y2="162"/>
+        <line x1="170" y1="185" x2="190" y2="173"/>
+        <line x1="170" y1="185" x2="190" y2="197"/>
+        <line x1="170" y1="185" x2="170" y2="208"/>
+        <line x1="170" y1="185" x2="150" y2="197"/>
+        <line x1="170" y1="185" x2="150" y2="173"/>
+      </g>
+      <text x="170" y="272" text-anchor="middle" font-family="'Courier New',monospace" font-size="44" font-weight="700" letter-spacing="10" fill="url(#g1)">SOLORA</text>
     </svg>
   </div>
   <div class="tagline">SOLAR · LORA · BITCOIN</div>
@@ -162,8 +210,23 @@
     <div class="stat-card"><span class="stat-value" id="networkUptime">—</span><span class="stat-label">Uptime</span></div>
   </div>
 
-  <div class="refresh-bar"><div class="refresh-fill" id="refreshFill"></div></div>
-  <div class="refresh-info"><span><span id="refreshDot">●</span> <span id="refreshStatus">Loading...</span></span><span id="lastUpdate"></span></div>
+  <!-- Digital countdown with circle -->
+  <div class="refresh-container">
+    <div class="refresh-status">
+      <span class="refresh-dot" id="refreshDot"></span>
+      <span class="refresh-text" id="refreshStatus">Loading...</span>
+    </div>
+    <div class="countdown-wrap">
+      <div class="countdown-circle">
+        <svg class="countdown-svg" width="32" height="32" viewBox="0 0 36 36">
+          <circle class="countdown-bg" cx="18" cy="18" r="16" fill="none" stroke-width="3"></circle>
+          <circle class="countdown-fill" cx="18" cy="18" r="16" fill="none" stroke-width="3" stroke-dasharray="100" stroke-dashoffset="0"></circle>
+        </svg>
+        <span class="countdown-text" id="countdownSeconds">30</span>
+      </div>
+      <span class="countdown-label">to refresh</span>
+    </div>
+  </div>
 
   <div class="section-header"><div class="section-title">LIVE MESH NETWORK</div><div class="section-count" id="meshCount"></div></div>
   <div id="meshContainer"><div class="empty-state">Loading network data...</div></div>
@@ -188,6 +251,7 @@
 </div>
 
 <script>
+// Helper functions
 function fmtRate(r){
   if(!r||r===0)return '—';
   if(r>=1e6)return (r/1e6).toFixed(2)+' MH/s';
@@ -212,16 +276,20 @@ function fmtDate(iso){
 function isOnline(iso){return iso&&(Date.now()-new Date(iso))<600000;}
 function pct(bits){return Math.min(100,Math.round((bits/76)*100));}
 
-// Check if mesh is from Python miner (BENNY'S BITS, ASUS, etc.)
-function isPythonMiner(m){
-  if(!m.group)return false;
-  const pythonGroups = ['BENNY\'S BITS', 'ASUS', 'PYTHON', 'MINER'];
-  return pythonGroups.some(g => m.group.toUpperCase().includes(g.toUpperCase()));
+// Check if mesh is Solo Miner (no workers, single device)
+function isSoloMiner(m){
+  const devices = m.devices || [];
+  const workers = devices.filter(d => d.role === 'worker');
+  // Solo miner = no workers OR group name suggests it's standalone
+  if(workers.length === 0) return true;
+  const soloGroups = ['BENNY\'S BITS', 'ASUS', 'PYTHON'];
+  if(m.group && soloGroups.some(g => m.group.toUpperCase().includes(g.toUpperCase()))) return true;
+  return false;
 }
 
 function buildCard(m){
   const online = isOnline(m.lastSeen);
-  const isPython = isPythonMiner(m);
+  const isSolo = isSoloMiner(m);
   const lt = m.lifetime || null;
   const p = pct(m.bestBits || 0);
   const devices = m.devices || [];
@@ -231,15 +299,15 @@ function buildCard(m){
   let cardClass = 'mesh-card';
   if(online) cardClass += ' online';
   if(!online) cardClass += ' offline';
-  if(isPython) cardClass += ' python';
+  if(isSolo) cardClass += ' solo';
   
-  // For Python miners, just show a simplified view
-  if(isPython){
+  // For Solo Miners, show simplified view
+  if(isSolo){
     return `
     <div class="${cardClass}" onclick="toggleCard('${m.meshId}')">
       <div class="card-row">
-        <span class="mesh-id">🐍 ${m.meshId}</span>
-        <span class="mesh-status ${online?'online':'offline'} ${isPython?'python':''}">${online?'● PYTHON MINER':'○ OFFLINE'}</span>
+        <span class="mesh-id">${m.meshId}</span>
+        <span class="mesh-status ${online?'online':'offline'} solo">${online?'● SOLO MINER':'○ OFFLINE'}</span>
         <div class="card-stats">
           <div class="stat-badge"><span class="stat-badge-label">Hash:</span><span class="stat-badge-value highlight">${fmtRate(m.hashRate)}</span></div>
           <div class="stat-badge"><span class="stat-badge-label">Best:</span><span class="stat-badge-value bits">${m.bestBits||0}/76</span></div>
@@ -247,11 +315,18 @@ function buildCard(m){
         </div>
       </div>
       <div class="bits-progress"><div class="bits-fill" style="width:${p}%"></div></div>
-      <div class="device-tree"><div class="no-workers">Python miner - standalone device</div></div>
+      ${lt && lt.bestBits > 0 ? `<div class="lifetime-bar">🏆 Best ever: <strong>${lt.bestBits} bits</strong> · Peak: <strong>${fmtRate(lt.bestRate)}</strong></div>` : ''}
+      <div class="device-tree"><div class="no-workers">Solo miner - operating independently</div></div>
+      <div class="card-detail" id="detail-${m.meshId}">
+        ${lt ? `<div class="detail-grid"><div class="detail-item"><span>All-time best</span><span>${lt.bestBits||0} bits (${fmtDate(lt.bestBitsAt)})</span></div>
+        <div class="detail-item"><span>Peak hash rate</span><span>${fmtRate(lt.bestRate)} (${fmtDate(lt.bestRateAt)})</span></div>
+        <div class="detail-item"><span>First seen</span><span>${fmtDate(lt.firstSeen)}</span></div>
+        <div class="detail-item"><span>Total reports</span><span>${(lt.totalReports||0).toLocaleString()}</span></div></div>` : ''}
+      </div>
     </div>`;
   }
   
-  // Build device tree - single lines
+  // Build device tree for mesh with workers
   let treeHtml = `
     <div class="coord-line">
       <div class="coord-icon">★</div>
@@ -359,8 +434,23 @@ function startTicker(r){tickerRate=r;if(tickerInterval)clearInterval(tickerInter
 
 const REFRESH_MS=30000;
 let refreshStart=Date.now();
-function updateRefreshBar(){const pct=Math.max(0,100-((Date.now()-refreshStart)/REFRESH_MS*100));const bar=document.getElementById('refreshFill');if(bar)bar.style.width=pct+'%';}
-setInterval(updateRefreshBar,200);
+let countdownInterval=null;
+
+function updateCountdown(){
+  const elapsed=Date.now()-refreshStart;
+  const remaining=Math.max(0,Math.ceil((REFRESH_MS-elapsed)/1000));
+  const seconds=Math.min(remaining,30);
+  document.getElementById('countdownSeconds').textContent=seconds;
+  
+  // Update circle progress
+  const circumference=100;
+  const offset=circumference-(seconds/30)*circumference;
+  const circle=document.querySelector('.countdown-fill');
+  if(circle)circle.style.strokeDasharray=`${circumference} ${circumference}`;
+  if(circle)circle.style.strokeDashoffset=offset;
+}
+
+setInterval(updateCountdown,200);
 
 let knownIds=JSON.parse(localStorage.getItem('solora_mesh_ids')||'[]');
 
@@ -374,7 +464,8 @@ async function loadDashboard(){
     document.getElementById('totalDevices').textContent=sum.totalDevices||'—';
     document.getElementById('totalMeshes').textContent=sum.totalMeshes||'—';
     document.getElementById('networkBest').textContent=(sum.networkBest||0)+' bits';
-    document.getElementById('networkUptime').textContent= (()=>{const s=Math.floor((Date.now()-new Date(sum.networkFirstSeen))/1000);if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'d';})();
+    const uptimeSecs=Math.floor((Date.now()-new Date(sum.networkFirstSeen))/1000);
+    document.getElementById('networkUptime').textContent=uptimeSecs<86400?Math.floor(uptimeSecs/3600)+'h':Math.floor(uptimeSecs/86400)+'d';
     startTicker(sum.totalHashRate||0);
     
     if(sum.allTimeBest&&sum.allTimeBest.bestBits>0){
@@ -398,9 +489,11 @@ async function loadDashboard(){
     meshes.sort((a,b)=>new Date(b.lastSeen)-new Date(a.lastSeen));
     renderMeshes(meshes);
     
+    document.getElementById('refreshDot').className='refresh-dot';
     document.getElementById('refreshStatus').textContent='Live';
     document.getElementById('lastUpdate').textContent='Updated '+new Date().toLocaleTimeString();
   }catch(e){
+    document.getElementById('refreshDot').className='refresh-dot offline';
     document.getElementById('refreshStatus').textContent='Offline';
   }
 }
@@ -416,10 +509,11 @@ async function lookupMesh(){
     const m=await r.json();
     if(!knownIds.includes(id)){knownIds.push(id);localStorage.setItem('solora_mesh_ids',JSON.stringify(knownIds));}
     const workers=(m.devices||[]).filter(d=>d.role==='worker').length;
-    result.innerHTML=`<strong style="color:#f7931a">MESH ${m.meshId}</strong> ${isOnline(m.lastSeen)?'● LIVE':'○ OFFLINE'}<br>Hash: ${fmtRate(m.hashRate)} · Best: ${m.bestBits||0}/76 bits · Devices: 1 + ${workers} workers<br>Last seen: ${timeAgo(m.lastSeen)}<br><span style="color:#5a6e7c">Your mesh will appear in the dashboard above.</span>`;
+    const isSolo=workers===0;
+    result.innerHTML=`<strong style="color:#e07810">MESH ${m.meshId}</strong> ${isOnline(m.lastSeen)?'● LIVE':'○ OFFLINE'} ${isSolo?'· SOLO MINER':''}<br>Hash: ${fmtRate(m.hashRate)} · Best: ${m.bestBits||0}/76 bits · Devices: ${workers+1}<br>Last seen: ${timeAgo(m.lastSeen)}<br><span style="color:#888">Your mesh will appear in the dashboard above.</span>`;
     loadDashboard();
   }catch(e){
-    result.innerHTML='Mesh <strong style="color:#f7931a">'+id+'</strong> not found.<br>Check Page 5 on your device for the correct mesh ID.';
+    result.innerHTML='Mesh <strong style="color:#e07810">'+id+'</strong> not found.<br>Check Page 5 on your device for the correct mesh ID.';
   }
 }
 
