@@ -5,434 +5,427 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SOLORA — Solar Bitcoin Mesh Miner</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #0a0a0a;
-      color: #ffffff;
-      font-family: 'Courier New', monospace;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 40px 20px;
-    }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#0a0e12;color:#e8edf2;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',monospace;padding:24px 16px;min-height:100vh}
+    .page{max-width:1400px;margin:0 auto}
 
-    /* ── Logo ── */
-    .logo-wrap {
-      margin-bottom: 10px;
-    }
-    .logo-wrap svg {
-      width: 220px;
-      height: auto;
-    }
-    .tagline {
-      font-size: 11px;
-      letter-spacing: 0.2em;
-      color: #006fa3;
-      text-align: center;
-      margin-bottom: 6px;
-      font-weight: 500;
-    }
-    .url-sub {
-      font-size: 10px;
-      color: #444;
-      text-align: center;
-      letter-spacing: 0.12em;
-      margin-bottom: 40px;
-    }
+    /* Logo */
+    .logo-wrap{text-align:center;margin-bottom:4px}
+    .logo-wrap svg{width:160px;height:auto}
+    .tagline{font-size:9px;letter-spacing:.2em;color:#f7931a;text-align:center;margin-bottom:2px}
+    .url-sub{font-size:9px;color:#5a6e7c;text-align:center;margin-bottom:20px}
 
-    /* ── Stats ── */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-      margin-bottom: 50px;
-      max-width: 600px;
-      width: 100%;
-    }
-    .stat-box {
-      border: 1px solid #1a1a1a;
-      padding: 20px;
-      text-align: center;
-      background: #111;
-    }
-    .stat-number {
-      font-size: 2rem;
-      color: #f7931a;
-      display: block;
-      margin-bottom: 5px;
-    }
-    .stat-label {
-      font-size: 0.65rem;
-      color: #555;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-    }
+    /* Stats bar */
+    .stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
+    .stat-card{background:#141a20;border:1px solid #2a3540;border-radius:12px;padding:14px 10px;text-align:center}
+    .stat-value{font-size:1.6rem;font-weight:700;display:block;margin-bottom:6px}
+    .stat-value.orange{color:#f7931a}
+    .stat-value.blue{color:#3b82f6}
+    .stat-value.green{color:#10b981}
+    .stat-value.purple{color:#a855f7}
+    .stat-label{font-size:.65rem;color:#8a9aaa;text-transform:uppercase;letter-spacing:.08em}
+    .stat-sub{font-size:.55rem;color:#5a6e7c;margin-top:4px}
 
-    /* ── Description ── */
-    .description {
-      max-width: 500px;
-      text-align: center;
-      color: #888;
-      line-height: 1.8;
-      margin-bottom: 40px;
-      font-size: 0.88rem;
-    }
-    .highlight { color: #f7931a; }
-    .highlight-blue { color: #009FDB; }
+    /* Refresh */
+    .refresh-bar{height:2px;background:#1e2832;border-radius:2px;margin-bottom:16px;overflow:hidden}
+    .refresh-fill{height:100%;background:#f7931a;width:100%;transition:width .3s linear}
+    .refresh-info{display:flex;justify-content:space-between;margin-bottom:20px;font-size:.65rem;color:#5a6e7c}
 
-    /* ── Links ── */
-    .links {
-      display: flex;
-      gap: 14px;
-      margin-bottom: 50px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    .link-btn {
-      border: 1px solid #f7931a;
-      color: #f7931a;
-      padding: 10px 22px;
-      text-decoration: none;
-      font-family: 'Courier New', monospace;
-      font-size: 0.75rem;
-      letter-spacing: 0.1em;
-      transition: all 0.2s;
-    }
-    .link-btn:hover { background: #f7931a; color: #000; }
-    .link-btn.blue {
-      border-color: #009FDB;
-      color: #009FDB;
-    }
-    .link-btn.blue:hover { background: #009FDB; color: #000; }
+    /* Section */
+    .section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    .section-title{font-size:.7rem;font-weight:700;color:#f7931a;letter-spacing:.1em}
+    .section-count{font-size:.65rem;color:#5a6e7c}
 
-    /* ── Principles ── */
-    .principles {
-      max-width: 500px;
-      width: 100%;
-      margin-bottom: 50px;
-    }
-    .principles-title {
-      font-size: 0.65rem;
-      letter-spacing: 0.15em;
-      color: #444;
-      text-transform: uppercase;
-      margin-bottom: 16px;
-      text-align: center;
-    }
-    .principle {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      margin-bottom: 12px;
-      font-size: 0.82rem;
-      color: #777;
-      line-height: 1.6;
-    }
-    .principle-dot { color: #f7931a; flex-shrink: 0; margin-top: 2px; }
+    /* Mesh card - compact */
+    .mesh-card{background:#141a20;border:1px solid #2a3540;border-radius:10px;margin-bottom:10px;overflow:hidden}
+    .mesh-card.online{border-left:3px solid #10b981}
+    .mesh-card.offline{opacity:.5}
+    .mesh-card.python{border-left:3px solid #8b5cf6;opacity:.7}
 
-    /* ── Mesh lookup ── */
-    .mesh-lookup {
-      max-width: 420px;
-      width: 100%;
-      margin-bottom: 50px;
-    }
-    .mesh-lookup h3 {
-      font-size: 0.65rem;
-      letter-spacing: 0.15em;
-      color: #444;
-      text-transform: uppercase;
-      margin-bottom: 12px;
-      text-align: center;
-    }
-    .lookup-row { display: flex; gap: 8px; }
-    .lookup-input {
-      flex: 1;
-      background: #111;
-      border: 1px solid #222;
-      color: #fff;
-      padding: 10px;
-      font-family: 'Courier New', monospace;
-      font-size: 1rem;
-      text-transform: uppercase;
-      letter-spacing: 0.2em;
-    }
-    .lookup-input:focus { outline: none; border-color: #f7931a; }
-    .lookup-btn {
-      background: #f7931a;
-      border: none;
-      color: #000;
-      padding: 10px 18px;
-      font-family: 'Courier New', monospace;
-      font-size: 0.75rem;
-      cursor: pointer;
-      letter-spacing: 0.08em;
-    }
-    .lookup-result {
-      margin-top: 12px;
-      padding: 12px;
-      border: 1px solid #1a1a1a;
-      background: #111;
-      font-size: 0.78rem;
-      color: #888;
-      display: none;
-      line-height: 1.7;
-    }
+    /* Card header - single line */
+    .card-row{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:10px 14px;background:#0d1217;border-bottom:1px solid #2a3540}
+    .mesh-id{font-family:'Courier New',monospace;font-weight:700;color:#f7931a;font-size:.85rem}
+    .mesh-status{font-size:.6rem;padding:2px 8px;border-radius:12px}
+    .mesh-status.online{background:#10b98120;color:#10b981}
+    .mesh-status.offline{background:#5a6e7c20;color:#8a9aaa}
+    .mesh-status.python{background:#8b5cf620;color:#a78bfa}
+    .card-stats{display:flex;flex-wrap:wrap;gap:12px;font-size:.7rem}
+    .stat-badge{display:flex;align-items:center;gap:4px}
+    .stat-badge-label{color:#5a6e7c}
+    .stat-badge-value{color:#e8edf2;font-weight:600}
+    .stat-badge-value.highlight{color:#f7931a}
+    .stat-badge-value.bits{color:#3b82f6}
 
-    /* ── Divider ── */
-    .divider {
-      width: 100%;
-      max-width: 500px;
-      border: none;
-      border-top: 1px solid #1a1a1a;
-      margin: 20px 0 40px;
-    }
+    /* Device tree - compact single line */
+    .device-tree{padding:8px 14px}
+    .coord-line{display:flex;align-items:center;gap:10px;padding:6px 10px;background:#1a222a;border-radius:8px;margin-bottom:6px}
+    .coord-icon{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#f7931a,#e06c00);display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
+    .coord-details{flex:1;display:flex;align-items:center;flex-wrap:wrap;gap:12px}
+    .coord-role{font-size:.6rem;font-weight:700;color:#f7931a}
+    .coord-id{font-family:'Courier New',monospace;font-size:.7rem;color:#e8edf2}
+    .coord-hr{font-size:.65rem;color:#8a9aaa}
+    .coord-hr strong{color:#f7931a}
 
-    /* ── Footer ── */
-    .footer {
-      font-size: 0.65rem;
-      color: #333;
-      text-align: center;
-      letter-spacing: 0.1em;
-      line-height: 2;
+    .workers-tree{margin-left:22px;position:relative;padding-left:12px}
+    .workers-tree::before{content:'';position:absolute;left:0;top:0;bottom:0;width:1px;background:#2a3540}
+    .worker-line{display:flex;align-items:center;gap:10px;padding:5px 10px;margin:3px 0;background:#0f151b;border-radius:6px;position:relative}
+    .worker-line::before{content:'';position:absolute;left:-12px;top:50%;width:12px;height:1px;background:#2a3540}
+    .worker-icon{width:22px;height:22px;border-radius:50%;background:#2a3540;display:flex;align-items:center;justify-content:center;font-size:9px;color:#8a9aaa}
+    .worker-details{flex:1;display:flex;align-items:center;flex-wrap:wrap;gap:12px}
+    .worker-role{font-size:.55rem;font-weight:700;color:#3b82f6}
+    .worker-id{font-family:'Courier New',monospace;font-size:.65rem;color:#e8edf2}
+    .worker-hr{font-size:.6rem;color:#8a9aaa}
+    .no-workers{font-size:.65rem;color:#5a6e7c;padding:8px;text-align:center;font-style:italic}
+
+    /* Lifetime banner */
+    .lifetime-bar{padding:6px 14px;background:#1a0e08;border-top:1px solid #2a1a10;font-size:.65rem;color:#8a6e5a}
+    .lifetime-bar strong{color:#f7931a}
+
+    /* Progress */
+    .bits-progress{height:2px;background:#1e2832;margin:0 14px 8px 14px;border-radius:2px}
+    .bits-fill{height:100%;background:linear-gradient(90deg,#f7931a,#3b82f6);border-radius:2px;transition:width .3s}
+
+    /* Expandable detail */
+    .card-detail{display:none;padding:12px 14px;border-top:1px solid #2a3540;background:#0d1217;font-size:.65rem}
+    .card-detail.open{display:block}
+    .detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+    .detail-item{display:flex;justify-content:space-between;padding:4px 0}
+    .detail-item span:first-child{color:#5a6e7c}
+    .detail-item span:last-child{color:#e8edf2}
+
+    /* All-time banner */
+    .alltime-banner{background:linear-gradient(135deg,#1a0e08,#0d1217);border:1px solid #2a1a10;border-radius:10px;padding:10px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px}
+    .alltime-icon{font-size:1.2rem}
+    .alltime-text{font-size:.7rem;color:#8a9aaa}
+    .alltime-text strong{color:#f7931a}
+
+    /* Description */
+    .description{font-size:.75rem;color:#8a9aaa;text-align:center;max-width:600px;margin:24px auto;line-height:1.6}
+    .highlight{color:#f7931a}
+    .highlight-blue{color:#3b82f6}
+
+    /* Links */
+    .links{display:flex;gap:10px;justify-content:center;margin-bottom:28px}
+    .link-btn{background:transparent;border:1px solid #2a3540;border-radius:8px;color:#8a9aaa;padding:6px 14px;font-size:.65rem;text-decoration:none;transition:all .2s}
+    .link-btn:hover{border-color:#f7931a;color:#f7931a}
+
+    /* Lookup */
+    .lookup-box{background:#141a20;border:1px solid #2a3540;border-radius:12px;padding:20px;max-width:440px;margin:0 auto 28px}
+    .lookup-box h3{font-size:.7rem;color:#f7931a;margin-bottom:12px}
+    .lookup-row{display:flex;gap:8px}
+    .lookup-input{flex:1;background:#0d1217;border:1px solid #2a3540;border-radius:8px;color:#f7931a;font-family:'Courier New',monospace;font-size:.9rem;padding:8px 12px;text-transform:uppercase}
+    .lookup-input:focus{border-color:#f7931a;outline:none}
+    .lookup-btn{background:#f7931a;border:none;border-radius:8px;color:#0a0e12;font-weight:700;padding:8px 14px;font-size:.65rem;cursor:pointer}
+    .lookup-result{margin-top:12px;font-size:.65rem;color:#8a9aaa;display:none}
+
+    hr.divider{border:none;border-top:1px solid #1e2832;margin:24px 0}
+    .principles{max-width:520px;margin:0 auto 24px}
+    .principle{display:flex;gap:8px;padding:6px 0;font-size:.65rem;color:#8a9aaa;border-bottom:1px solid #1e2832}
+    .principle-dot{color:#f7931a}
+    .footer{text-align:center;font-size:.6rem;color:#5a6e7c;margin-top:24px}
+    .empty-state{text-align:center;padding:40px;color:#5a6e7c;background:#141a20;border-radius:12px;border:1px solid #2a3540}
+
+    @media(max-width:640px){
+      .stats-grid{grid-template-columns:repeat(2,1fr)}
+      .card-row{flex-direction:column;align-items:flex-start}
+      .coord-details,.worker-details{gap:8px}
     }
-    .footer a { color: #444; text-decoration: none; }
-    .footer a:hover { color: #009FDB; }
   </style>
 </head>
 <body>
+<div class="page">
 
-  <!-- Logo SVG inline -->
   <div class="logo-wrap">
-    <svg viewBox="0 0 340 310" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="g1" x1="0" y1="0" x2="0" y2="310" gradientUnits="userSpaceOnUse">
-          <stop offset="0%"   stop-color="#f7931a"/>
-          <stop offset="48%"  stop-color="#d4621a"/>
-          <stop offset="100%" stop-color="#009FDB"/>
-        </linearGradient>
-      </defs>
-      <!-- Sun -->
-      <circle cx="170" cy="80" r="34" fill="url(#g1)"/>
-      <!-- Rays -->
-      <g stroke="url(#g1)" stroke-width="3.5" stroke-linecap="round" opacity="0.9">
-        <line x1="170" y1="36" x2="170" y2="22"/>
-        <line x1="170" y1="124" x2="170" y2="138"/>
-        <line x1="126" y1="80" x2="112" y2="80"/>
-        <line x1="214" y1="80" x2="228" y2="80"/>
-        <line x1="139" y1="49" x2="129" y2="39"/>
-        <line x1="201" y1="111" x2="211" y2="121"/>
-        <line x1="201" y1="49" x2="211" y2="39"/>
-        <line x1="139" y1="111" x2="129" y2="121"/>
+    <svg viewBox="0 0 340 290" xmlns="http://www.w3.org/2000/svg" width="140" height="auto">
+      <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="290"><stop offset="0%" stop-color="#f7931a"/><stop offset="100%" stop-color="#009FDB"/></linearGradient></defs>
+      <circle cx="170" cy="80" r="32" fill="url(#g1)"/>
+      <g stroke="url(#g1)" stroke-width="3" stroke-linecap="round" opacity=".9">
+        <line x1="170" y1="38" x2="170" y2="26"/><line x1="170" y1="122" x2="170" y2="134"/>
+        <line x1="128" y1="80" x2="116" y2="80"/><line x1="212" y1="80" x2="224" y2="80"/>
       </g>
-      <!-- LoRa arcs left -->
-      <g fill="none" stroke-linecap="round">
-        <path d="M130 62 A48 48 0 0 0 130 98" stroke="url(#g1)" stroke-width="3" opacity="0.8"/>
-        <path d="M110 50 A72 72 0 0 0 110 110" stroke="url(#g1)" stroke-width="2.2" opacity="0.48"/>
-        <path d="M90 38 A96 96 0 0 0 90 122" stroke="url(#g1)" stroke-width="1.6" opacity="0.26"/>
-      </g>
-      <!-- LoRa arcs right -->
-      <g fill="none" stroke-linecap="round">
-        <path d="M210 62 A48 48 0 0 1 210 98" stroke="url(#g1)" stroke-width="3" opacity="0.8"/>
-        <path d="M230 50 A72 72 0 0 1 230 110" stroke="url(#g1)" stroke-width="2.2" opacity="0.48"/>
-        <path d="M250 38 A96 96 0 0 1 250 122" stroke="url(#g1)" stroke-width="1.6" opacity="0.26"/>
-      </g>
-      <!-- Mesh centre -->
-      <circle cx="170" cy="185" r="6" fill="url(#g1)"/>
-      <!-- Mesh inner ring -->
-      <circle cx="170" cy="162" r="4.5" fill="url(#g1)" opacity="0.8"/>
-      <circle cx="190" cy="173" r="4.5" fill="url(#g1)" opacity="0.8"/>
-      <circle cx="190" cy="197" r="4.5" fill="url(#g1)" opacity="0.8"/>
-      <circle cx="170" cy="208" r="4.5" fill="url(#g1)" opacity="0.8"/>
-      <circle cx="150" cy="197" r="4.5" fill="url(#g1)" opacity="0.8"/>
-      <circle cx="150" cy="173" r="4.5" fill="url(#g1)" opacity="0.8"/>
-      <!-- Mesh edges centre -->
-      <g stroke="url(#g1)" stroke-width="1.4" opacity="0.45" fill="none">
-        <line x1="170" y1="185" x2="170" y2="162"/>
-        <line x1="170" y1="185" x2="190" y2="173"/>
-        <line x1="170" y1="185" x2="190" y2="197"/>
-        <line x1="170" y1="185" x2="170" y2="208"/>
-        <line x1="170" y1="185" x2="150" y2="197"/>
-        <line x1="170" y1="185" x2="150" y2="173"/>
-      </g>
-      <!-- Mesh edges ring -->
-      <g stroke="url(#g1)" stroke-width="0.9" opacity="0.25" fill="none">
-        <line x1="170" y1="162" x2="190" y2="173"/>
-        <line x1="190" y1="173" x2="190" y2="197"/>
-        <line x1="190" y1="197" x2="170" y2="208"/>
-        <line x1="170" y1="208" x2="150" y2="197"/>
-        <line x1="150" y1="197" x2="150" y2="173"/>
-        <line x1="150" y1="173" x2="170" y2="162"/>
-      </g>
-      <!-- Outer nodes -->
-      <circle cx="170" cy="143" r="3" fill="url(#g1)" opacity="0.35"/>
-      <circle cx="207" cy="162" r="3" fill="url(#g1)" opacity="0.35"/>
-      <circle cx="207" cy="204" r="3" fill="url(#g1)" opacity="0.35"/>
-      <circle cx="170" cy="227" r="3" fill="url(#g1)" opacity="0.35"/>
-      <circle cx="133" cy="204" r="3" fill="url(#g1)" opacity="0.35"/>
-      <circle cx="133" cy="162" r="3" fill="url(#g1)" opacity="0.35"/>
-      <g stroke="url(#g1)" stroke-width="0.7" opacity="0.15" fill="none">
-        <line x1="170" y1="162" x2="170" y2="143"/>
-        <line x1="190" y1="173" x2="207" y2="162"/>
-        <line x1="190" y1="197" x2="207" y2="204"/>
-        <line x1="170" y1="208" x2="170" y2="227"/>
-        <line x1="150" y1="197" x2="133" y2="204"/>
-        <line x1="150" y1="173" x2="133" y2="162"/>
-      </g>
-      <!-- Wordmark -->
-      <text x="170" y="272" text-anchor="middle"
-        font-family="Courier New, monospace"
-        font-size="46" font-weight="700"
-        letter-spacing="10"
-        fill="url(#g1)">SOLORA</text>
+      <text x="170" y="272" text-anchor="middle" font-family="monospace" font-size="44" font-weight="700" letter-spacing="10" fill="url(#g1)">SOLORA</text>
     </svg>
   </div>
-
   <div class="tagline">SOLAR · LORA · BITCOIN</div>
   <div class="url-sub">solora.network</div>
 
-  <!-- Live stats -->
+  <div class="alltime-banner" id="alltimeBanner" style="display:none">
+    <span class="alltime-icon">🏆</span>
+    <div class="alltime-text" id="alltimeText"></div>
+  </div>
+
   <div class="stats-grid">
-    <div class="stat-box">
-      <span class="stat-number" id="deviceCount">—</span>
-      <span class="stat-label">Devices online</span>
-    </div>
-    <div class="stat-box">
-      <span class="stat-number" id="hashRate">—</span>
-      <span class="stat-label">Network hash rate</span>
-    </div>
-    <div class="stat-box">
-      <span class="stat-number" id="meshCount">—</span>
-      <span class="stat-label">Active meshes</span>
-    </div>
+    <div class="stat-card"><span class="stat-value orange" id="totalDevices">—</span><span class="stat-label">Devices</span></div>
+    <div class="stat-card"><span class="stat-value blue" id="totalHashRate">—</span><span class="stat-label">Network Hash</span></div>
+    <div class="stat-card"><span class="stat-value green" id="totalMeshes">—</span><span class="stat-label">Meshes</span></div>
+    <div class="stat-card"><span class="stat-value purple" id="networkBest">—</span><span class="stat-label">Best Score</span><div class="stat-sub">/76 bits</div></div>
+    <div class="stat-card"><span class="stat-value" id="networkUptime">—</span><span class="stat-label">Uptime</span></div>
   </div>
 
-  <div id="statsNote" style="font-size:0.65rem;color:#333;letter-spacing:0.08em;margin-bottom:30px;text-align:center;">
-    Live network stats coming soon — API in progress
-  </div>
+  <div class="refresh-bar"><div class="refresh-fill" id="refreshFill"></div></div>
+  <div class="refresh-info"><span><span id="refreshDot">●</span> <span id="refreshStatus">Loading...</span></span><span id="lastUpdate"></span></div>
 
-  <div class="description">
-    A <span class="highlight">solar-powered</span> Bitcoin miner that automatically forms a
-    <span class="highlight-blue">self-organizing LoRa mesh</span> with nearby devices.
-    Set it on a windowsill. It mines real Bitcoin 24/7 powered by sunlight.
-    No electricity bill. No account. No company in the middle.
-    Every device that joins makes the network stronger.
-  </div>
+  <div class="section-header"><div class="section-title">LIVE MESH NETWORK</div><div class="section-count" id="meshCount"></div></div>
+  <div id="meshContainer"><div class="empty-state">Loading network data...</div></div>
 
-  <div class="links">
-    <a class="link-btn" href="https://github.com/solarlora/solora">GitHub →</a>
-    <a class="link-btn" href="#lookup">Find my mesh →</a>
-  </div>
+  <div class="description">A <span class="highlight">solar-powered</span> Bitcoin miner that forms a <span class="highlight-blue">self-organizing LoRa mesh</span>. Set it on a windowsill. It mines real Bitcoin 24/7 powered by sunlight.</div>
 
+  <div class="links"><a class="link-btn" href="https://github.com/solarlora/solora">GitHub →</a><a class="link-btn" href="#lookup">Find My Mesh →</a></div>
+
+  <hr class="divider">
+  <div class="lookup-box" id="lookup"><h3>FIND YOUR MESH</h3><div class="lookup-row"><input class="lookup-input" id="meshInput" maxlength="4" placeholder="A3F2" oninput="this.value=this.value.toUpperCase()"><button class="lookup-btn" onclick="lookupMesh()">Look Up</button></div><div class="lookup-result" id="lookupResult"></div></div>
   <hr class="divider">
 
   <div class="principles">
-    <div class="principles-title">The principles</div>
-    <div class="principle">
-      <span class="principle-dot">▸</span>
-      <span>Works forever without us. No server dependency. No account required.</span>
-    </div>
-    <div class="principle">
-      <span class="principle-dot">▸</span>
-      <span>Your Bitcoin address is stored only on your device. We never see it.</span>
-    </div>
-    <div class="principle">
-      <span class="principle-dot">▸</span>
-      <span>Open source firmware. Audit every line. Fork it. Improve it.</span>
-    </div>
-    <div class="principle">
-      <span class="principle-dot">▸</span>
-      <span>If we disappeared tomorrow your device keeps mining forever.</span>
-    </div>
-    <div class="principle">
-      <span class="principle-dot">▸</span>
-      <span>Relay tally builds toward Solora coin — earned by network work, not bought.</span>
-    </div>
+    <div class="principle"><span class="principle-dot">▸</span><span>No server dependency. No account required.</span></div>
+    <div class="principle"><span class="principle-dot">▸</span><span>Your Bitcoin address stays on your device. We never see it.</span></div>
+    <div class="principle"><span class="principle-dot">▸</span><span>Open source. Audit every line. Fork it. Improve it.</span></div>
+    <div class="principle"><span class="principle-dot">▸</span><span>If we disappeared tomorrow, your device keeps mining forever.</span></div>
   </div>
 
-  <hr class="divider">
+  <div class="footer"><p>solora.network · <a href="https://github.com/solarlora/solora">Open Source MIT</a></p><p>No personal data collected. Ever.</p></div>
 
-  <!-- Mesh lookup -->
-  <div class="mesh-lookup" id="lookup">
-    <h3>Find your mesh</h3>
-    <div class="lookup-row">
-      <input class="lookup-input" id="meshInput" type="text"
-        maxlength="4" placeholder="A3F2"
-        oninput="this.value=this.value.toUpperCase()">
-      <button class="lookup-btn" onclick="lookupMesh()">Look up</button>
+</div>
+
+<script>
+function fmtRate(r){
+  if(!r||r===0)return '—';
+  if(r>=1e6)return (r/1e6).toFixed(2)+' MH/s';
+  if(r>=1e3)return (r/1e3).toFixed(1)+' KH/s';
+  return r+' H/s';
+}
+
+function timeAgo(iso){
+  if(!iso)return 'never';
+  const s=Math.floor((Date.now()-new Date(iso))/1000);
+  if(s<60)return s+'s';
+  if(s<3600)return Math.floor(s/60)+'m';
+  if(s<86400)return Math.floor(s/3600)+'h';
+  return Math.floor(s/86400)+'d';
+}
+
+function fmtDate(iso){
+  if(!iso)return '—';
+  return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+}
+
+function isOnline(iso){return iso&&(Date.now()-new Date(iso))<600000;}
+function pct(bits){return Math.min(100,Math.round((bits/76)*100));}
+
+// Check if mesh is from Python miner (BENNY'S BITS, ASUS, etc.)
+function isPythonMiner(m){
+  if(!m.group)return false;
+  const pythonGroups = ['BENNY\'S BITS', 'ASUS', 'PYTHON', 'MINER'];
+  return pythonGroups.some(g => m.group.toUpperCase().includes(g.toUpperCase()));
+}
+
+function buildCard(m){
+  const online = isOnline(m.lastSeen);
+  const isPython = isPythonMiner(m);
+  const lt = m.lifetime || null;
+  const p = pct(m.bestBits || 0);
+  const devices = m.devices || [];
+  const coordinator = devices.find(d => d.role === 'coord');
+  const workers = devices.filter(d => d.role === 'worker');
+  
+  let cardClass = 'mesh-card';
+  if(online) cardClass += ' online';
+  if(!online) cardClass += ' offline';
+  if(isPython) cardClass += ' python';
+  
+  // For Python miners, just show a simplified view
+  if(isPython){
+    return `
+    <div class="${cardClass}" onclick="toggleCard('${m.meshId}')">
+      <div class="card-row">
+        <span class="mesh-id">🐍 ${m.meshId}</span>
+        <span class="mesh-status ${online?'online':'offline'} ${isPython?'python':''}">${online?'● PYTHON MINER':'○ OFFLINE'}</span>
+        <div class="card-stats">
+          <div class="stat-badge"><span class="stat-badge-label">Hash:</span><span class="stat-badge-value highlight">${fmtRate(m.hashRate)}</span></div>
+          <div class="stat-badge"><span class="stat-badge-label">Best:</span><span class="stat-badge-value bits">${m.bestBits||0}/76</span></div>
+          <div class="stat-badge"><span class="stat-badge-label">Seen:</span><span class="stat-badge-value">${timeAgo(m.lastSeen)}</span></div>
+        </div>
+      </div>
+      <div class="bits-progress"><div class="bits-fill" style="width:${p}%"></div></div>
+      <div class="device-tree"><div class="no-workers">Python miner - standalone device</div></div>
+    </div>`;
+  }
+  
+  // Build device tree - single lines
+  let treeHtml = `
+    <div class="coord-line">
+      <div class="coord-icon">★</div>
+      <div class="coord-details">
+        <span class="coord-role">COORDINATOR</span>
+        <span class="coord-id">Device ${coordinator ? coordinator.id : '—'}</span>
+        <span class="coord-hr">${coordinator ? fmtRate(coordinator.hr) : '—'} · Best ${coordinator ? coordinator.bb || 0 : 0} bits</span>
+      </div>
+    </div>`;
+  
+  if(workers.length > 0){
+    treeHtml += `<div class="workers-tree">`;
+    workers.forEach(w => {
+      treeHtml += `
+        <div class="worker-line">
+          <div class="worker-icon">●</div>
+          <div class="worker-details">
+            <span class="worker-role">WORKER</span>
+            <span class="worker-id">Device ${w.id || '—'}</span>
+            <span class="worker-hr">${fmtRate(w.hr)} · Best ${w.bb || 0} bits</span>
+          </div>
+        </div>`;
+    });
+    treeHtml += `</div>`;
+  } else {
+    treeHtml += `<div class="workers-tree"><div class="no-workers">No workers connected</div></div>`;
+  }
+  
+  let lifetimeHtml = '';
+  if(lt && lt.bestBits > 0){
+    lifetimeHtml = `<div class="lifetime-bar">🏆 Best ever: <strong>${lt.bestBits} bits</strong> · Peak: <strong>${fmtRate(lt.bestRate)}</strong></div>`;
+  }
+  
+  let detailHtml = '';
+  if(lt){
+    detailHtml = `<div class="detail-grid">
+      <div class="detail-item"><span>All-time best</span><span>${lt.bestBits||0} bits (${fmtDate(lt.bestBitsAt)})</span></div>
+      <div class="detail-item"><span>Peak hash rate</span><span>${fmtRate(lt.bestRate)} (${fmtDate(lt.bestRateAt)})</span></div>
+      <div class="detail-item"><span>First seen</span><span>${fmtDate(lt.firstSeen)}</span></div>
+      <div class="detail-item"><span>Total reports</span><span>${(lt.totalReports||0).toLocaleString()}</span></div>
+    </div>`;
+  }
+
+  return `
+  <div class="${cardClass}" onclick="toggleCard('${m.meshId}')">
+    <div class="card-row">
+      <span class="mesh-id">${m.meshId}</span>
+      <span class="mesh-status ${online?'online':'offline'}">${online?'● LIVE':'○ OFFLINE'}</span>
+      <div class="card-stats">
+        <div class="stat-badge"><span class="stat-badge-label">Hash:</span><span class="stat-badge-value highlight">${fmtRate(m.hashRate)}</span></div>
+        <div class="stat-badge"><span class="stat-badge-label">Best:</span><span class="stat-badge-value bits">${m.bestBits||0}/76 bits</span></div>
+        <div class="stat-badge"><span class="stat-badge-label">Miners:</span><span class="stat-badge-value">${workers.length + 1}</span></div>
+        <div class="stat-badge"><span class="stat-badge-label">Seen:</span><span class="stat-badge-value">${timeAgo(m.lastSeen)}</span></div>
+        <div class="stat-badge"><span class="stat-badge-label">v${m.firmware||'—'}</span></div>
+      </div>
     </div>
-    <div class="lookup-result" id="lookupResult"></div>
-  </div>
+    <div class="bits-progress"><div class="bits-fill" style="width:${p}%"></div></div>
+    ${lifetimeHtml}
+    <div class="device-tree">${treeHtml}</div>
+    <div class="card-detail" id="detail-${m.meshId}">${detailHtml}</div>
+  </div>`;
+}
 
-  <hr class="divider">
+function toggleCard(id){
+  const el=document.getElementById('detail-'+id);
+  if(el)el.classList.toggle('open');
+}
 
-  <div class="footer">
-    <p>solora.network &nbsp;·&nbsp;
-      <a href="https://github.com/solarlora/solora">open source MIT</a>
-      &nbsp;·&nbsp;
-      <a href="journal.html">build journal</a>
-    </p>
-    <p style="margin-top:6px;">No personal data collected. Ever.</p>
-    <p style="margin-top:6px; color:#222;">THE DEVICE WORKS FOR ITS OWNER. NOT FOR US.</p>
-  </div>
-
-  <script>
-    async function loadStats() {
-      try {
-        const r = await fetch('/api/stats/summary');
-        if (!r.ok) throw new Error();
-        const d = await r.json();
-        document.getElementById('deviceCount').textContent = d.totalDevices || '—';
-        document.getElementById('hashRate').textContent = fmtRate(d.totalHashRate);
-        document.getElementById('meshCount').textContent = d.totalMeshes || '—';
-        document.getElementById('statsNote').style.display = 'none';
-      } catch(e) {
-        document.getElementById('deviceCount').textContent = '—';
-        document.getElementById('hashRate').textContent = '—';
-        document.getElementById('meshCount').textContent = '—';
-      }
+function renderMeshes(meshes){
+  const container=document.getElementById('meshContainer');
+  const meshCountSpan=document.getElementById('meshCount');
+  
+  if(!meshes||meshes.length===0){
+    container.innerHTML='<div class="empty-state">No active meshes yet. Be the first.</div>';
+    meshCountSpan.textContent='0 meshes';
+    return;
+  }
+  
+  // Group by group name
+  const groups={};
+  for(const m of meshes){
+    if(!m||!m.meshId)continue;
+    const g = m.group || 'Ungrouped';
+    if(!groups[g])groups[g]=[];
+    groups[g].push(m);
+  }
+  
+  let html='';
+  const totalMeshes = Object.values(groups).flat().length;
+  meshCountSpan.textContent=totalMeshes+' meshes';
+  
+  for(const [groupName, groupMeshes] of Object.entries(groups)){
+    html+=`<div class="group-wrap"><div class="section-header" style="margin-top:8px"><div class="section-title">${groupName}</div></div>`;
+    for(const mesh of groupMeshes){
+      html+=buildCard(mesh);
     }
+    html+=`</div>`;
+  }
+  
+  container.innerHTML=html;
+}
 
-    async function lookupMesh() {
-      const id = document.getElementById('meshInput').value.trim();
-      const result = document.getElementById('lookupResult');
-      if (id.length !== 4) {
-        result.style.display = 'block';
-        result.innerHTML = 'Enter your 4-character mesh ID from the device status page.';
-        return;
-      }
-      result.style.display = 'block';
-      result.innerHTML = 'Looking up mesh ' + id + '...';
-      try {
-        const r = await fetch('/api/stats/mesh/' + id);
-        if (!r.ok) throw new Error();
-        const d = await r.json();
-        result.innerHTML =
-          'MESH ' + id + '<br>' +
-          'Devices: ' + d.deviceCount + '<br>' +
-          'Hash rate: ' + fmtRate(d.hashRate) + '<br>' +
-          'Best score: ' + d.bestBits + ' bits<br>' +
-          'Firmware: v' + d.firmware + '<br>' +
-          'Last seen: ' + d.lastSeen;
-      } catch(e) {
-        result.innerHTML =
-          'Mesh ' + id + ' not found yet.<br>' +
-          'Make sure your device has WiFi connected and stats sharing enabled.';
-      }
+let tickerRate=0,tickerInterval=null;
+function startTicker(r){tickerRate=r;if(tickerInterval)clearInterval(tickerInterval);tickerInterval=setInterval(()=>{tickerRate=Math.max(0,tickerRate+(Math.random()-.5)*50);document.getElementById('totalHashRate').textContent=fmtRate(tickerRate);},500);}
+
+const REFRESH_MS=30000;
+let refreshStart=Date.now();
+function updateRefreshBar(){const pct=Math.max(0,100-((Date.now()-refreshStart)/REFRESH_MS*100));const bar=document.getElementById('refreshFill');if(bar)bar.style.width=pct+'%';}
+setInterval(updateRefreshBar,200);
+
+let knownIds=JSON.parse(localStorage.getItem('solora_mesh_ids')||'[]');
+
+async function loadDashboard(){
+  refreshStart=Date.now();
+  try{
+    const sumRes=await fetch('/api/stats/summary');
+    if(!sumRes.ok)throw new Error();
+    const sum=await sumRes.json();
+    
+    document.getElementById('totalDevices').textContent=sum.totalDevices||'—';
+    document.getElementById('totalMeshes').textContent=sum.totalMeshes||'—';
+    document.getElementById('networkBest').textContent=(sum.networkBest||0)+' bits';
+    document.getElementById('networkUptime').textContent= (()=>{const s=Math.floor((Date.now()-new Date(sum.networkFirstSeen))/1000);if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'d';})();
+    startTicker(sum.totalHashRate||0);
+    
+    if(sum.allTimeBest&&sum.allTimeBest.bestBits>0){
+      document.getElementById('alltimeBanner').style.display='flex';
+      document.getElementById('alltimeText').innerHTML=`<strong>All-Time Record: ${sum.allTimeBest.bestBits} bits</strong> · Set ${fmtDate(sum.allTimeBest.bestBitsAt)}`+(sum.allTimeBest.meshId?` by mesh ${sum.allTimeBest.meshId}`:'');
     }
-
-    function fmtRate(r) {
-      if (!r) return '—';
-      if (r >= 1000000) return (r/1000000).toFixed(2) + ' MH/s';
-      if (r >= 1000)    return (r/1000).toFixed(1) + ' KH/s';
-      return r + ' H/s';
+    
+    if(sum.meshIds){
+      sum.meshIds.forEach(id=>{if(!knownIds.includes(id))knownIds.push(id);});
+      localStorage.setItem('solora_mesh_ids',JSON.stringify(knownIds));
     }
+    
+    const meshes=[];
+    for(const id of knownIds.slice(0,20)){
+      try{
+        const r=await fetch('/api/stats/mesh/'+id);
+        if(r.ok)meshes.push(await r.json());
+      }catch(e){}
+    }
+    
+    meshes.sort((a,b)=>new Date(b.lastSeen)-new Date(a.lastSeen));
+    renderMeshes(meshes);
+    
+    document.getElementById('refreshStatus').textContent='Live';
+    document.getElementById('lastUpdate').textContent='Updated '+new Date().toLocaleTimeString();
+  }catch(e){
+    document.getElementById('refreshStatus').textContent='Offline';
+  }
+}
 
-    document.getElementById('meshInput')
-      .addEventListener('keypress', e => { if (e.key==='Enter') lookupMesh(); });
+async function lookupMesh(){
+  const id=document.getElementById('meshInput').value.trim().toUpperCase();
+  const result=document.getElementById('lookupResult');
+  if(id.length!==4){result.style.display='block';result.innerHTML='Enter your 4-character mesh ID from Page 5 on your device.';return;}
+  result.style.display='block';result.innerHTML='Searching...';
+  try{
+    const r=await fetch('/api/stats/mesh/'+id);
+    if(!r.ok)throw new Error();
+    const m=await r.json();
+    if(!knownIds.includes(id)){knownIds.push(id);localStorage.setItem('solora_mesh_ids',JSON.stringify(knownIds));}
+    const workers=(m.devices||[]).filter(d=>d.role==='worker').length;
+    result.innerHTML=`<strong style="color:#f7931a">MESH ${m.meshId}</strong> ${isOnline(m.lastSeen)?'● LIVE':'○ OFFLINE'}<br>Hash: ${fmtRate(m.hashRate)} · Best: ${m.bestBits||0}/76 bits · Devices: 1 + ${workers} workers<br>Last seen: ${timeAgo(m.lastSeen)}<br><span style="color:#5a6e7c">Your mesh will appear in the dashboard above.</span>`;
+    loadDashboard();
+  }catch(e){
+    result.innerHTML='Mesh <strong style="color:#f7931a">'+id+'</strong> not found.<br>Check Page 5 on your device for the correct mesh ID.';
+  }
+}
 
-    loadStats();
-    setInterval(loadStats, 60000);
-  </script>
+document.getElementById('meshInput').addEventListener('keypress',e=>{if(e.key==='Enter')lookupMesh();});
+loadDashboard();
+setInterval(loadDashboard,REFRESH_MS);
+</script>
 </body>
 </html>
